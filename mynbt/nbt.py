@@ -7,104 +7,116 @@ class TAG:
     def __init__(self):
         self.id = self.__class__.id
 
-    def consume(self, rawbytes):
+
+#    def parse_payload(self, rawbytes):
+#        pass
+
+    @staticmethod
+    def parse_id(rawbytes):
         id, = unpack('>B',rawbytes[0:1])
-        assert id == self.id
-        return rawbytes[1:]
+        return id,rawbytes[1:]
+
+    @staticmethod
+    def parse_name(rawbytes):
+        l, = unpack('>h',rawbytes[0:2])
+        name = rawbytes[2:2+l].decode("utf8")
+        return name,rawbytes[2+l:]
+
+    @staticmethod
+    def parse_tag(rawbytes):
+        id,rawbytes = TAG.parse_id(rawbytes)
+        tag = TAG.datatypes[id]
+        assert tag.id == id
+
+        return tag, rawbytes
 
     @staticmethod
     def parse(rawbytes):
-        tag = TAG.datatypes[rawbytes[0]]
+        tag, rawbytes = TAG.parse_tag(rawbytes)
         result = tag()
-        result.consume(rawbytes)
+        if tag is not TAG_End:
+          result.name, rawbytes = result.parse_name(rawbytes)
+          result.payload,rawbytes = result.parse_payload(rawbytes)
+
+        return result, rawbytes
+
+    @staticmethod
+    def parse_file(path):
+        with gzip.open(path, "rb") as f:
+          result, garbage = TAG.parse(f.read())
+
+        assert garbage == b""
         return result
-
-class TAG_Named(TAG):
-    def __init__(self):
-        super().__init__()
-
-    def consume(self, rawbytes):
-        rawbytes = super().consume(rawbytes)
-        l, = unpack('>h',rawbytes[0:2])
-        self.name = rawbytes[2:2+l].decode("utf8")
-        return rawbytes[2+l:]
 
 class TAG_End(TAG):
     id = 0
 
-class TAG_Byte(TAG_Named):
+class TAG_Byte(TAG):
     id = 1
 
-    def consume(self, rawbytes):
-        rawbytes = super().consume(rawbytes)
-        self.payload = rawbytes[0:1]
-        return rawbytes[1:]
+    @staticmethod
+    def parse_payload(rawbytes):
+        return rawbytes[0:1], rawbytes[1:]
 
-class TAG_Short(TAG_Named):
+class TAG_Short(TAG):
     id = 2
 
-    def consume(self, rawbytes):
-        rawbytes = super().consume(rawbytes)
-        self.payload = rawbytes[0:2]
-        return rawbytes[2:]
+    @staticmethod
+    def parse_payload(rawbytes):
+        return rawbytes[0:2], rawbytes[2:]
 
-class TAG_Int(TAG_Named):
+class TAG_Int(TAG):
     id = 3
 
-    def consume(self, rawbytes):
-        rawbytes = super().consume(rawbytes)
-        self.payload = rawbytes[0:4]
-        return rawbytes[4:]
+    @staticmethod
+    def parse_payload(rawbytes):
+        return rawbytes[0:4], rawbytes[4:]
 
-class TAG_Long(TAG_Named):
+class TAG_Long(TAG):
     id = 4
 
-    def consume(self, rawbytes):
-        rawbytes = super().consume(rawbytes)
-        self.payload = rawbytes[0:4]
-        return rawbytes[4:]
+    @staticmethod
+    def parse_payload(rawbytes):
+        return rawbytes[0:8], rawbytes[8:]
 
-class TAG_Float(TAG_Named):
+class TAG_Float(TAG):
     id = 5
 
-    def consume(self, rawbytes):
-        rawbytes = super().consume(rawbytes)
-        self.payload = rawbytes[0:4]
-        return rawbytes[4:]
+    @staticmethod
+    def parse_payload(rawbytes):
+        return rawbytes[0:4], rawbytes[4:]
 
-class TAG_Double(TAG_Named):
+class TAG_Double(TAG):
     id = 6
 
-    def consume(self, rawbytes):
-        rawbytes = super().consume(rawbytes)
-        self.payload = rawbytes[0:8]
-        return rawbytes[8:]
+    @staticmethod
+    def parse_payload(rawbytes):
+        return rawbytes[0:8], rawbytes[8:]
 
-class TAG_Byte_Array(TAG_Named):
+class TAG_Byte_Array(TAG):
     id = 7
 
-    def consume(self, rawbytes):
-        rawbytes = super().consume(rawbytes)
+    @staticmethod
+    def parse_payload(rawbytes):
         l, = unpack('>i',rawbytes[0:4])
-        self.payload = rawbytes[4:4+l*1]
-        return rawbytes[4+l*1:]
+        return rawbytes[4:4+l*1], rawbytes[4+l*1:]
 
-class TAG_String(TAG_Named):
+class TAG_String(TAG):
     id = 8
 
-    def consume(self, rawbytes):
-        rawbytes = super().consume(rawbytes)
+    @staticmethod
+    def parse_payload(rawbytes):
         l, = unpack('>h',rawbytes[0:2])
-        self.payload = rawbytes[2:2+l]
-        return rawbytes[2+l:]
+        return rawbytes[2:2+l], rawbytes[2+l:]
 
-class TAG_List(TAG_Named):
+class TAG_List(TAG):
     id = 9
 
-    def consume(self, rawbytes):
-        rawbytes = super().consume(rawbytes)
-        item_type = rawbytes[0]
-        count, = unpack('>i',rawbytes[1:5])
+    @staticmethod
+    def parse_payload(rawbytes):
+        tag, rawbytes = TAG.parse_tag(rawbytes)
+        count, = unpack('>i',rawbytes[0:4])
+        rawbytes = rawbytes[4:]
         # XXX Check implications of that statement:
         # """ If the length of the list is 0 or negative, 
         #     the type may be 0 (TAG_End) but otherwise it must 
@@ -113,10 +125,33 @@ class TAG_List(TAG_Named):
 
         if count < 0:
             count = 0
-        self.items = [None]*count
+        items = []
+        while count > 0:
+          item = tag()
+          item.payload,rawbytes = item.parse_payload(rawbytes)
+          items.append(item)
+          count -= 1
+        
+        return items,rawbytes
 
-        self.payload = rawbytes[2:2+l]
-        return rawbytes[2+l:]
+class TAG_Compound(TAG):
+    id = 10
+
+    def __repr__(self):
+        return "TAG_Compound(" +\
+                ", ".join(repr(item) for item in items) +\
+                ")"
+
+    @staticmethod
+    def parse_payload(rawbytes):
+        items = []
+        while True:
+          item, rawbytes = TAG.parse(rawbytes)
+          if type(item) is TAG_End:
+            break
+          items.append(item)
+          
+        return items,rawbytes
 
 TAG.datatypes = { t.id: t for t in (
     TAG_End,
@@ -127,7 +162,9 @@ TAG.datatypes = { t.id: t for t in (
     TAG_Float,
     TAG_Double,
     TAG_Byte_Array,
-    TAG_String
+    TAG_String,
+    TAG_List,
+    TAG_Compound
         )}
 
 class NBTNode:
