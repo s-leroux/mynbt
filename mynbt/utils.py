@@ -47,8 +47,10 @@ class Slice:
         elif type(idx) is slice:
             if idx.step is not None:
                 raise TypeError("step slices are not supported")
+            istart = 0 if idx.start is None else idx.start
+            istop = self.stop if idx.stop is None else idx.stop
             return Slice(self.base,
-                    idx.start + (self.start if idx.start >= 0 else self.stop),
-                    idx.stop + (self.start if idx.stop >= 0 else self.stop))
+                    istart + (self.start if istart >= 0 else self.stop),
+                    istop + (self.start if istop >= 0 else self.stop))
                         
 

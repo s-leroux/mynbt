@@ -45,6 +45,21 @@ class TestRefSlices(unittest.TestCase):
         b = rslice(a,-4,-1)
         self.assertEqual(b, a[-4:-1])
 
+    def test_slice_to_end(self):
+        a = [*range(10)]
+        b = rslice(a,1,None)
+        self.assertEqual(b, a[1:])
+
+    def test_slice_from_start(self):
+        a = [*range(10)]
+        b = rslice(a,None, 4)
+        self.assertEqual(b, a[:4])
+
+    def test_slice_copy(self):
+        a = [*range(10)]
+        b = rslice(a,None, None)
+        self.assertEqual(b, a[:])
+
     def test_compatibility_with_byte_string(self):
         a = b"012345678"
         b = rslice(a,1,4)
