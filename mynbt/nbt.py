@@ -1,5 +1,5 @@
 import gzip
-from struct import unpack
+from struct import unpack_from
 
 class TAG:
     datatypes = {}
@@ -12,40 +12,44 @@ class TAG:
 #        pass
 
     @staticmethod
-    def parse_id(rawbytes):
-        id, = unpack('>B',rawbytes[0:1])
-        return id,rawbytes[1:]
+    def parse_id(base, offset):
+        id, = unpack_from('>B',base, offset)
+        return id,offset+1
 
     @staticmethod
-    def parse_name(rawbytes):
-        l, = unpack('>h',rawbytes[0:2])
-        name = rawbytes[2:2+l].decode("utf8")
-        return name,rawbytes[2+l:]
+    def parse_name(base, offset):
+        l, = unpack_from('>h',base, offset)
+        name = base[offset+2:offset+2+l].decode("utf8")
+        return name,offset+2+l
 
     @staticmethod
-    def parse_tag(rawbytes):
-        id,rawbytes = TAG.parse_id(rawbytes)
+    def parse_tag(base, offset):
+        id,offset = TAG.parse_id(base, offset)
         tag = TAG.datatypes[id]
         assert tag.id == id
 
-        return tag, rawbytes
+        return tag, offset
 
     @staticmethod
-    def parse(rawbytes):
-        tag, rawbytes = TAG.parse_tag(rawbytes)
+    def parse(base, offset):
+        start = offset
+        tag, offset = TAG.parse_tag(base,offset)
         result = tag()
         if tag is not TAG_End:
-          result.name, rawbytes = result.parse_name(rawbytes)
-          result.payload,rawbytes = result.parse_payload(rawbytes)
+          result.name, offset = result.parse_name(base, offset)
+          result.payload,offset = result.parse_payload(base, offset)
 
-        return result, rawbytes
+        result.cache = base[start:offset]
+
+        return result, offset
 
     @staticmethod
     def parse_file(path):
         with gzip.open(path, "rb") as f:
-          result, garbage = TAG.parse(f.read())
+          data = f.read()
+          result, offset = TAG.parse(data, 0)
 
-        assert garbage == b""
+        assert data[offset:] == b""
         return result
 
 class TAG_End(TAG):
@@ -55,68 +59,68 @@ class TAG_Byte(TAG):
     id = 1
 
     @staticmethod
-    def parse_payload(rawbytes):
-        return rawbytes[0:1], rawbytes[1:]
+    def parse_payload(base, offset):
+        return base[offset:offset+1], offset+1
 
 class TAG_Short(TAG):
     id = 2
 
     @staticmethod
-    def parse_payload(rawbytes):
-        return rawbytes[0:2], rawbytes[2:]
+    def parse_payload(base, offset):
+        return base[offset:offset+2], offset+2
 
 class TAG_Int(TAG):
     id = 3
 
     @staticmethod
-    def parse_payload(rawbytes):
-        return rawbytes[0:4], rawbytes[4:]
+    def parse_payload(base, offset):
+        return base[offset:offset+4], offset+4
 
 class TAG_Long(TAG):
     id = 4
 
     @staticmethod
-    def parse_payload(rawbytes):
-        return rawbytes[0:8], rawbytes[8:]
+    def parse_payload(base, offset):
+        return base[offset:offset+8], offset+8
 
 class TAG_Float(TAG):
     id = 5
 
     @staticmethod
-    def parse_payload(rawbytes):
-        return rawbytes[0:4], rawbytes[4:]
+    def parse_payload(base, offset):
+        return base[offset:offset+4], offset+4
 
 class TAG_Double(TAG):
     id = 6
 
     @staticmethod
-    def parse_payload(rawbytes):
-        return rawbytes[0:8], rawbytes[8:]
+    def parse_payload(base, offset):
+        return base[offset:offset+8], offset+8
 
 class TAG_Byte_Array(TAG):
     id = 7
 
     @staticmethod
-    def parse_payload(rawbytes):
-        l, = unpack('>i',rawbytes[0:4])
-        return rawbytes[4:4+l*1], rawbytes[4+l*1:]
+    def parse_payload(base, offset):
+        l, = unpack_from('>i',base, offset)
+        return base[offset+4:offset+4+l*1], offset+4+l*1
 
 class TAG_String(TAG):
     id = 8
 
     @staticmethod
-    def parse_payload(rawbytes):
-        l, = unpack('>h',rawbytes[0:2])
-        return rawbytes[2:2+l], rawbytes[2+l:]
+    def parse_payload(base, offset):
+        l, = unpack_from('>h',base, offset)
+        return base[offset+2:offset+2+l], offset+2+l
 
 class TAG_List(TAG):
     id = 9
 
     @staticmethod
-    def parse_payload(rawbytes):
-        tag, rawbytes = TAG.parse_tag(rawbytes)
-        count, = unpack('>i',rawbytes[0:4])
-        rawbytes = rawbytes[4:]
+    def parse_payload(base, offset):
+        tag, offset = TAG.parse_tag(base, offset)
+        count, = unpack_from('>i',base, offset)
+        offset += 4
         # XXX Check implications of that statement:
         # """ If the length of the list is 0 or negative, 
         #     the type may be 0 (TAG_End) but otherwise it must 
@@ -128,11 +132,11 @@ class TAG_List(TAG):
         items = []
         while count > 0:
           item = tag()
-          item.payload,rawbytes = item.parse_payload(rawbytes)
+          item.payload,offset = item.parse_payload(base, offset)
           items.append(item)
           count -= 1
         
-        return items,rawbytes
+        return items,offset
 
 class TAG_Compound(TAG):
     id = 10
@@ -143,15 +147,15 @@ class TAG_Compound(TAG):
                 ")"
 
     @staticmethod
-    def parse_payload(rawbytes):
+    def parse_payload(base, offset):
         items = []
         while True:
-          item, rawbytes = TAG.parse(rawbytes)
+          item, offset = TAG.parse(base, offset)
           if type(item) is TAG_End:
             break
           items.append(item)
           
-        return items,rawbytes
+        return items,offset
 
 TAG.datatypes = { t.id: t for t in (
     TAG_End,

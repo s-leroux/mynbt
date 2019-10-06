@@ -57,5 +57,16 @@ class Slice:
             return Slice(self.base,
                     istart + (self.start if istart >= 0 else self.stop),
                     istop + (self.start if istop >= 0 else self.stop))
-                        
+
+    def __add__(self, other):
+        if type(other) is not Slice:
+          raise TypeError()
+
+        if other.base is not self.base:
+          raise NotImplementedError()
+
+        if self.stop != other.start:
+          raise NotImplementedError()
+
+        return Slice(self.base, self.start, other.stop)
 

@@ -88,3 +88,17 @@ class TestNestedSlices(unittest.TestCase):
       self.assertEqual(nested[1], self.base[4])
       self.assertEqual(len(nested), len(self.base)-6)
 
+class TestSliceMath(unittest.TestCase):
+    def setUp(self):
+      self.base = b"ABCDEFGHIJK"
+      self.slice = rslice(self.base)
+
+    def test_slice_add(self):
+      a = self.slice[1:3]
+      b = self.slice[3:6]
+      c = a+b
+
+      self.assertIs(c.base, self.slice.base)
+      self.assertEqual(len(c), 5)
+      self.assertEqual(c.start, a.start)
+      self.assertEqual(c.stop, b.stop)
