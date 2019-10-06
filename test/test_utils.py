@@ -64,3 +64,27 @@ class TestRefSlices(unittest.TestCase):
         a = b"012345678"
         b = rslice(a,1,4)
         self.assertEqual(bytes(b), b"123")
+
+class TestNestedSlices(unittest.TestCase):
+    def setUp(self):
+      self.base = b"ABCDEFGHIJK"
+      self.slice = rslice(self.base)
+
+    def test_nested(self):
+      nested = self.slice[:]
+      self.assertIs(nested.base, self.slice.base)
+      self.assertEqual(nested.start, 0)
+      self.assertEqual(nested.stop, len(self.base))
+
+      nested = self.slice[1:-1]
+      self.assertIs(nested.base, self.slice.base)
+      self.assertEqual(nested.start, 1)
+      self.assertEqual(nested.stop, len(self.base)-1)
+
+    def test_nested_get_item(self):
+      nested = self.slice[1:-1]
+      nested = nested[1:-1]
+      nested = nested[1:-1]
+      self.assertEqual(nested[1], self.base[4])
+      self.assertEqual(len(nested), len(self.base)-6)
+

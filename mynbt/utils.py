@@ -1,4 +1,4 @@
-def rslice(base, start, stop):
+def rslice(base, start=None, stop=None):
     return Slice(base, start, stop)
 
 class Slice:
@@ -18,9 +18,14 @@ class Slice:
         if start > stop:
             start = stop
 
-        self.base = base
-        self.start = start
-        self.stop = stop
+        if type(base) is Slice:
+          self.base = base.base
+          self.start = start+base.start
+          self.stop = stop+base.start
+        else:
+          self.base = base
+          self.start = start
+          self.stop = stop
 
     def __repr__(self):
         return "Slice({base},{start},{stop})".format(**self.__dict__)
