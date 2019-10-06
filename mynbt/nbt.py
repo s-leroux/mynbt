@@ -8,9 +8,6 @@ class TAG:
         self.id = self.__class__.id
 
 
-#    def parse_payload(self, rawbytes):
-#        pass
-
     @staticmethod
     def parse_id(base, offset):
         id, = unpack_from('>B',base, offset)
@@ -37,7 +34,7 @@ class TAG:
         result = tag()
         if tag is not TAG_End:
           result.name, offset = result.parse_name(base, offset)
-          result.payload,offset = result.parse_payload(base, offset)
+          result.value,offset = result.parse_payload(base, offset)
 
         result.cache = base[start:offset]
 
@@ -60,42 +57,42 @@ class TAG_Byte(TAG):
 
     @staticmethod
     def parse_payload(base, offset):
-        return base[offset:offset+1], offset+1
+        return None, offset+1
 
 class TAG_Short(TAG):
     id = 2
 
     @staticmethod
     def parse_payload(base, offset):
-        return base[offset:offset+2], offset+2
+        return None, offset+2
 
 class TAG_Int(TAG):
     id = 3
 
     @staticmethod
     def parse_payload(base, offset):
-        return base[offset:offset+4], offset+4
+        return None, offset+4
 
 class TAG_Long(TAG):
     id = 4
 
     @staticmethod
     def parse_payload(base, offset):
-        return base[offset:offset+8], offset+8
+        return None, offset+8
 
 class TAG_Float(TAG):
     id = 5
 
     @staticmethod
     def parse_payload(base, offset):
-        return base[offset:offset+4], offset+4
+        return None, offset+4
 
 class TAG_Double(TAG):
     id = 6
 
     @staticmethod
     def parse_payload(base, offset):
-        return base[offset:offset+8], offset+8
+        return None, offset+8
 
 class TAG_Byte_Array(TAG):
     id = 7
@@ -103,7 +100,7 @@ class TAG_Byte_Array(TAG):
     @staticmethod
     def parse_payload(base, offset):
         l, = unpack_from('>i',base, offset)
-        return base[offset+4:offset+4+l*1], offset+4+l*1
+        return None, offset+4+l*1
 
 class TAG_String(TAG):
     id = 8
@@ -111,7 +108,7 @@ class TAG_String(TAG):
     @staticmethod
     def parse_payload(base, offset):
         l, = unpack_from('>h',base, offset)
-        return base[offset+2:offset+2+l], offset+2+l
+        return None, offset+2+l
 
 class TAG_List(TAG):
     id = 9
