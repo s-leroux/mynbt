@@ -6,33 +6,33 @@ class TAG:
     datatypes = {}
 
     def __init__(self, value = None, parent = None):
-        self.id = self.__class__.id
-        self.name = None
+        self._id = self.__class__.id
+        self._name = None
         self._value = value
-        self.parents = WeakSet()
+        self._parents = WeakSet()
         self.register_parent(parent)
 
     def __repr__(self):
-        name = self.name
+        name = self._name
         attr=[]
         if name is not None:
           attr.append("name="+name)
-        if self.cache is not None:
+        if self._cache is not None:
           attr.append("cached")
 
         return "{tag}({attr})".format(tag=self.__class__.__name__, attr=", ".join(attr))
 
     def register_parent(self,parent):
         if parent is not None:
-          self.parents.add(parent)
+          self._parents.add(parent)
 
     def invalidate(self):
         queue = [self]
         while queue:
           item = queue.pop()
-          if item.cache:
-            item.cache = None
-            queue.extend(item.parents)
+          if item._cache:
+            item._cache = None
+            queue.extend(item._parents)
 
     def export(self, compact=True):
         """ Export a NBT data structure as Python native objects.
@@ -47,7 +47,8 @@ class TAG:
             'value': value,
           }
 
-    def _get_value(self):
+    @property
+    def value(self):
         return self.get_value()
 
     def get_value(self):
@@ -56,16 +57,9 @@ class TAG:
 
         return self._value
 
-    def set_value(self):
-        self.invalidate()
-
-    def del_value(self):
-        pass
-
-    def unpack(self):
-        pass
-
-    value = property(_get_value, set_value, del_value)
+    @property
+    def name(self):
+        return self._name
 
     @staticmethod
     def parse_id(base, offset):
@@ -92,10 +86,10 @@ class TAG:
         tag, offset = TAG.parse_tag(base,offset)
         result = tag(parent=parent)
         if tag is not TAG_End:
-          result.name, offset = result.parse_name(base, offset)
+          result._name, offset = result.parse_name(base, offset)
           offset = result.parse_payload(base, offset)
 
-        result.cache = base[start:offset]
+        result._cache = base[start:offset]
 
         return result, offset
 
@@ -124,7 +118,7 @@ class TAG_Short(TAG):
         return offset+2
 
     def unpack(self):
-        return unpack_from(">h", self.cache[-2:])
+        return unpack_from(">h", self._cache[-2:])
 
 class TAG_Int(TAG):
     id = 3
@@ -193,12 +187,12 @@ class TAG_Compound(TAG):
     id = 10
 
     def __init__(self, *args, **kwargs):
-        self.items = {}
+        self._items = {}
         super().__init__(*args, **kwargs)
 
     def __repr__(self):
         return super().__repr__() + " {" +\
-                ", ".join(repr(item) for item in self.items) +\
+                ", ".join(repr(item) for item in self._items.values()) +\
                 "}"
 
     def parse_payload(self, base, offset):
@@ -207,18 +201,18 @@ class TAG_Compound(TAG):
           item, offset = TAG.parse(base, offset, parent=self)
           if type(item) is TAG_End:
             break
-          items[item.name] = item
+          items[item._name] = item
           
-        self.items = items
+        self._items = items
         return offset
 
     def keys(self):
-        return self.items.keys()
+        return self._items.keys()
 
     def export(self, compact=True):
         """ Export a NBT data structure as Python native objects.
         """
-        value = {k: v.export(compact) for k, v in self.items.items()}
+        value = {k: v.export(compact) for k, v in self._items.items()}
 
         if compact:
           return value
@@ -229,15 +223,24 @@ class TAG_Compound(TAG):
           }
 
     def get_value(self):
-        return self.items
+        return self
 
     def __getitem__(self, name):
-        item = self.items[name]
+        item = self._items[name]
 
         return item.value
 
+    def __setitem__(self, name, value):
+        self._items[name] = value # XXX should promote native values to TAG_... ?
+
     def __getattr__(self, name):
         return self[name]
+
+    def __setattr__(self, name, value):
+        if name.startswith("_"):
+          object.__setattr__(self,name,value)
+        else:
+          self[name] = value
 
 TAG.datatypes = { t.id: t for t in (
     TAG_End,
