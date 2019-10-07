@@ -104,6 +104,26 @@ class TestCompoundTag(unittest.TestCase):
         child = t.items['Comp']
         self.assertEqual(child.name, 'Comp')
 
+class TestExport(unittest.TestCase):
+    CASES = (
+      dict(dump=SOME_SHORT, value=32767, extended={'type': 'TAG_Short', 'value': 32767}),
+      dict(dump=SOME_COMPOUND, value=dict(shortTest=32767), extended=dict(type='TAG_Compound', value={'shortTest': {'type': 'TAG_Short', 'value': 32767}})),
+    )
+
+    def test_export_short(self):
+        for case in self.CASES:
+          t, _ = TAG.parse(bytes.fromhex(case['dump']), 0)
+
+          x = t.export()
+          self.assertEqual(x, case['value'])
+
+          x = t.export(compact=True)
+          self.assertEqual(x, case['value'])
+
+          x = t.export(compact=False)
+          self.assertEqual(x, case['extended'])
+
+
 import gzip
 class TestCache(unittest.TestCase):
     def test_compound_cache(self):

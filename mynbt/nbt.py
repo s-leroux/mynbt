@@ -34,6 +34,19 @@ class TAG:
             item.cache = None
             queue.extend(item.parents)
 
+    def export(self, compact=True):
+        """ Export a NBT data structure as Python native objects.
+        """
+        value = self.value
+
+        if compact:
+          return value
+        else:
+          return {
+            'type': self.__class__.__name__,
+            'value': value,
+          }
+
     def _get_value(self):
         return self.get_value()
 
@@ -201,6 +214,19 @@ class TAG_Compound(TAG):
 
     def keys(self):
         return self.items.keys()
+
+    def export(self, compact=True):
+        """ Export a NBT data structure as Python native objects.
+        """
+        value = {k: v.export(compact) for k, v in self.items.items()}
+
+        if compact:
+          return value
+        else:
+          return {
+            'type': self.__class__.__name__,
+            'value': value
+          }
 
     def get_value(self):
         return self.items
