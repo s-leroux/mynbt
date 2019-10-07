@@ -7,16 +7,12 @@ class TAG:
 
     def __init__(self, value = None, parent = None):
         self._id = self.__class__.id
-        self._name = None
         self._value = value
         self._parents = WeakSet()
         self.register_parent(parent)
 
     def __repr__(self):
-        name = self._name
         attr=[]
-        if name is not None:
-          attr.append("name="+name)
         if self._cache is not None:
           attr.append("cached")
 
@@ -57,10 +53,6 @@ class TAG:
 
         return self._value
 
-    @property
-    def name(self):
-        return self._name
-
     @staticmethod
     def parse_id(base, offset):
         id, = unpack_from('>B',base, offset)
@@ -83,21 +75,22 @@ class TAG:
     @staticmethod
     def parse(base, offset, parent = None):
         start = offset
+        name = None
         tag, offset = TAG.parse_tag(base,offset)
         result = tag(parent=parent)
         if tag is not TAG_End:
-          result._name, offset = result.parse_name(base, offset)
+          name, offset = result.parse_name(base, offset)
           offset = result.parse_payload(base, offset)
 
         result._cache = base[start:offset]
 
-        return result, offset
+        return result, name, offset
 
     @staticmethod
     def parse_file(path):
         with gzip.open(path, "rb") as f:
           data = f.read()
-          result, offset = TAG.parse(data, 0)
+          result, name, offset = TAG.parse(data, 0)
 
         assert data[offset:] == b""
         return result
@@ -198,10 +191,10 @@ class TAG_Compound(TAG):
     def parse_payload(self, base, offset):
         items = {}
         while True:
-          item, offset = TAG.parse(base, offset, parent=self)
+          item, name, offset = TAG.parse(base, offset, parent=self)
           if type(item) is TAG_End:
             break
-          items[item._name] = item
+          items[name] = item
           
         self._items = items
         return offset
