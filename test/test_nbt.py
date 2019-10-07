@@ -2,6 +2,15 @@ import unittest
 
 from mynbt.nbt import *
 
+SOME_COMPOUND = "".join((
+  "0A",                 # tag
+  "00 04 43 6f 6d 70",  # name
+
+  # payload
+  "02  00 09  73 68 6F 72 74 54 65 73 74  7F FF"
+  "00"                  #end
+))
+
 class TestTags(unittest.TestCase):
     def test_TAG_End(self):
         t = TAG_End()
@@ -75,6 +84,10 @@ class TestCompoundTag(unittest.TestCase):
         item = t['Data']
         self.assertIn('DataPacks', list(item.keys()))
         self.assertIn('GameRules', list(item.keys()))
+
+    def test_get_value_in_compount(self):
+        t, _ = TAG.parse(bytes.fromhex(SOME_COMPOUND), 0)
+        self.assertEqual(t.shortTest, 32767)
 
     def test_get_value(self):
         t, _ = TAG.parse(bytes.fromhex("02  00 09  73 68 6F 72 74 54 65 73 74  7F FF"), 0)

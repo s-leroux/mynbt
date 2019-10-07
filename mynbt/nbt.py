@@ -8,6 +8,9 @@ class TAG:
         self.id = self.__class__.id
         self._value = value
 
+    def _get_value(self):
+        return self.get_value()
+
     def get_value(self):
         if self._value is None:
           self._value, = self.unpack()
@@ -23,7 +26,7 @@ class TAG:
     def unpack(self):
         pass
 
-    value = property(get_value, set_value, del_value)
+    value = property(_get_value, set_value, del_value)
 
     @staticmethod
     def parse_id(base, offset):
@@ -169,10 +172,13 @@ class TAG_Compound(TAG):
     def keys(self):
         return self.items.keys()
 
+    def get_value(self):
+        return self.items
+
     def __getitem__(self, name):
         item = self.items[name]
 
-        return item
+        return item.value
 
     def __getattr__(self, name):
         return self[name]
