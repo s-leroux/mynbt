@@ -1,15 +1,29 @@
 import unittest
 
 from mynbt.nbt import *
-
+SOME_SHORT = "".join((
+  "02",                     # tag
+  "00 09", b"shortTest".hex(),   # name
+  "7F FF"                   # value
+))
 SOME_COMPOUND = "".join((
-  "0A",                 # tag
-  "00 04 43 6f 6d 70",  # name
+  "0A",                     # tag
+  "00 04", b"Comp".hex(),   # name
 
   # payload
-  "02  00 09  73 68 6F 72 74 54 65 73 74  7F FF"
-  "00"                  #end
+  SOME_SHORT,
+  "00"                      #end
 ))
+SOME_NESTED_COMPOUND = "".join((
+  "0A",                     # tag
+  "00 04", b"Data".hex(),   # name
+
+  # payload
+  SOME_SHORT,
+  SOME_COMPOUND,
+  "00"                      #end
+))
+
 
 class TestTags(unittest.TestCase):
     def test_TAG_End(self):
@@ -59,15 +73,6 @@ class TestParseFiles(unittest.TestCase):
         t = TAG.parse_file("test/data/level.dat")
         self.assertIsInstance(t, TAG_Compound)
 
-import gzip
-class TestCache(unittest.TestCase):
-    def test_compound_cache(self):
-        with gzip.open("test/data/level.dat", "rb") as f:
-          data = f.read()
-          t, offset = TAG.parse(data, 0)
-
-        self.assertEqual(t.cache, data)
-
 class TestCompoundTag(unittest.TestCase):
     def test_keys(self):
         t = TAG.parse_file("test/data/level.dat")
@@ -93,5 +98,43 @@ class TestCompoundTag(unittest.TestCase):
         t, _ = TAG.parse(bytes.fromhex("02  00 09  73 68 6F 72 74 54 65 73 74  7F FF"), 0)
         self.assertEqual(t.value, 32767)
 
+    def test_nested_compound(self):
+        t, _ = TAG.parse(bytes.fromhex(SOME_NESTED_COMPOUND), 0)
+        self.assertEqual(t.name, 'Data')
+        child = t.items['Comp']
+        self.assertEqual(child.name, 'Comp')
 
+import gzip
+class TestCache(unittest.TestCase):
+    def test_compound_cache(self):
+        with gzip.open("test/data/level.dat", "rb") as f:
+          data = f.read()
+          t, offset = TAG.parse(data, 0)
+
+        self.assertEqual(t.cache, data)
+
+    def test_parent_tracking(self):
+        """ Nested elements shoud track their parent as weak links
+        """
+        t, _ = TAG.parse(bytes.fromhex(SOME_NESTED_COMPOUND), 0)
+        child = t.items['Comp']
+        data = t.items['shortTest']
+
+        self.assertEqual([*child.parents], [t])
+        del t
+        self.assertEqual([*child.parents], [])
+
+    def test_invalidate(self):
+        """ Invalidte should invalidate the whole ancestors chain
+        """
+        t, _ = TAG.parse(bytes.fromhex(SOME_NESTED_COMPOUND), 0)
+        child1 = t.items['Comp']
+        child2 = t.items['shortTest']
+        data = child1.items['shortTest']
+
+        data.invalidate()
+        self.assertIsNone(data.cache)
+        self.assertIsNone(child1.cache)
+        self.assertIsNotNone(child2.cache)
+        self.assertIsNone(t.cache)
 

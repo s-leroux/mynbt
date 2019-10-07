@@ -1,12 +1,35 @@
 import gzip
 from struct import unpack_from
+from weakref import WeakSet
 
 class TAG:
     datatypes = {}
 
-    def __init__(self, value = None):
+    def __init__(self, value = None, parent = None):
         self.id = self.__class__.id
+        self.name = None
         self._value = value
+        self.parents = WeakSet()
+        self.register_parent(parent)
+
+    def __repr__(self):
+        name = self.name
+        if name is not None:
+          return "{tag}(name={name})".format(tag=self.__class__.__name__, name=self.name)
+        else:
+          return "{tag}()".format(tag=self.__class__.__name__)
+
+    def register_parent(self,parent):
+        if parent is not None:
+          self.parents.add(parent)
+
+    def invalidate(self):
+        queue = [self]
+        while queue:
+          item = queue.pop()
+          if item.cache:
+            item.cache = None
+            queue.extend(item.parents)
 
     def _get_value(self):
         return self.get_value()
@@ -18,7 +41,7 @@ class TAG:
         return self._value
 
     def set_value(self):
-        pass
+        self.invalidate()
 
     def del_value(self):
         pass
@@ -48,10 +71,10 @@ class TAG:
         return tag, offset
 
     @staticmethod
-    def parse(base, offset):
+    def parse(base, offset, parent = None):
         start = offset
         tag, offset = TAG.parse_tag(base,offset)
-        result = tag()
+        result = tag(parent=parent)
         if tag is not TAG_End:
           result.name, offset = result.parse_name(base, offset)
           offset = result.parse_payload(base, offset)
@@ -142,7 +165,7 @@ class TAG_List(TAG):
             count = 0
         items = []
         while count > 0:
-          item = tag()
+          item = tag(parent=self)
           offset = item.parse_payload(base, offset)
           items.append(item)
           count -= 1
@@ -153,15 +176,19 @@ class TAG_List(TAG):
 class TAG_Compound(TAG):
     id = 10
 
+    def __init__(self, *args, **kwargs):
+        self.items = {}
+        super().__init__(*args, **kwargs)
+
     def __repr__(self):
-        return "TAG_Compound(" +\
-                ", ".join(repr(item) for item in items) +\
-                ")"
+        return super().__repr__() + " {" +\
+                ", ".join(repr(item) for item in self.items) +\
+                "}"
 
     def parse_payload(self, base, offset):
         items = {}
         while True:
-          item, offset = TAG.parse(base, offset)
+          item, offset = TAG.parse(base, offset, parent=self)
           if type(item) is TAG_End:
             break
           items[item.name] = item
