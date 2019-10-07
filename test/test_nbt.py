@@ -133,6 +133,12 @@ class TestCache(unittest.TestCase):
         data = child1.items['shortTest']
 
         data.invalidate()
+
+        # print(t)
+        # print(child1)
+        # print(child2)
+        # print(data)
+
         self.assertIsNone(data.cache)
         self.assertIsNone(child1.cache)
         self.assertIsNotNone(child2.cache)

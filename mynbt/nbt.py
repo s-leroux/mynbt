@@ -14,10 +14,13 @@ class TAG:
 
     def __repr__(self):
         name = self.name
+        attr=[]
         if name is not None:
-          return "{tag}(name={name})".format(tag=self.__class__.__name__, name=self.name)
-        else:
-          return "{tag}()".format(tag=self.__class__.__name__)
+          attr.append("name="+name)
+        if self.cache is not None:
+          attr.append("cached")
+
+        return "{tag}({attr})".format(tag=self.__class__.__name__, attr=", ".join(attr))
 
     def register_parent(self,parent):
         if parent is not None:
