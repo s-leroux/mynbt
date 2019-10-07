@@ -221,7 +221,7 @@ class TAG_Compound(TAG):
     def __getitem__(self, name):
         item = self._items[name]
 
-        return item.value
+        return item
 
     def __setitem__(self, name, value):
         self._items[name] = value # XXX should promote native values to TAG_... ?

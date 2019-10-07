@@ -23,6 +23,11 @@ SOME_NESTED_COMPOUND = "".join((
   SOME_COMPOUND,
   "00"                      #end
 ))
+EMPTY_COMPOUND = "".join((
+  "0A",                     # tag
+  "00 05", b"Empty".hex(),  # name
+  "00"                      #end
+))
 
 
 class TestTags(unittest.TestCase):
@@ -92,7 +97,7 @@ class TestCompoundTag(unittest.TestCase):
 
     def test_get_value_in_compount(self):
         t, _, _ = TAG.parse(bytes.fromhex(SOME_COMPOUND), 0)
-        self.assertEqual(t.shortTest, 32767)
+        self.assertEqual(t.shortTest.value, 32767)
 
     def test_get_value(self):
         t, _, _ = TAG.parse(bytes.fromhex("02  00 09  73 68 6F 72 74 54 65 73 74  7F FF"), 0)
@@ -105,7 +110,7 @@ class TestCompoundTag(unittest.TestCase):
 
     def test_path(self):
         t, *_ = TAG.parse(bytes.fromhex(SOME_NESTED_COMPOUND), 0)
-        self.assertEqual(t.Comp.shortTest, 32767)
+        self.assertEqual(t.Comp.shortTest.value, 32767)
 
 class TestExport(unittest.TestCase):
     CASES = (
@@ -183,4 +188,14 @@ class TestSetValue(unittest.TestCase):
 
         nbt.x = val
         self.assertIn("x", nbt.keys())
-        self.assertIs(val.value, nbt.x)
+        self.assertIs(val.value, nbt.x.value)
+
+    def test_copy(self):
+        """ Items can be copied between compounds
+        """
+        nbt, *_ = TAG.parse(bytes.fromhex(SOME_COMPOUND), 0)
+        other, *_ = TAG.parse(bytes.fromhex(EMPTY_COMPOUND), 0)
+
+        other.x = nbt.shortTest
+        self.assertIn("x", other.keys())
+        self.assertIs(nbt.shortTest, other.x)
