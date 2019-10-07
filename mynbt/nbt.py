@@ -4,9 +4,26 @@ from struct import unpack_from
 class TAG:
     datatypes = {}
 
-    def __init__(self):
+    def __init__(self, value = None):
         self.id = self.__class__.id
+        self._value = value
 
+    def get_value(self):
+        if self._value is None:
+          self._value, = self.unpack()
+
+        return self._value
+
+    def set_value(self):
+        pass
+
+    def del_value(self):
+        pass
+
+    def unpack(self):
+        pass
+
+    value = property(get_value, set_value, del_value)
 
     @staticmethod
     def parse_id(base, offset):
@@ -34,7 +51,7 @@ class TAG:
         result = tag()
         if tag is not TAG_End:
           result.name, offset = result.parse_name(base, offset)
-          result.value,offset = result.parse_payload(base, offset)
+          offset = result.parse_payload(base, offset)
 
         result.cache = base[start:offset]
 
@@ -55,66 +72,60 @@ class TAG_End(TAG):
 class TAG_Byte(TAG):
     id = 1
 
-    @staticmethod
-    def parse_payload(base, offset):
-        return None, offset+1
+    def parse_payload(self, base, offset):
+        return offset+1
 
 class TAG_Short(TAG):
     id = 2
 
-    @staticmethod
-    def parse_payload(base, offset):
-        return None, offset+2
+    def parse_payload(self, base, offset):
+        return offset+2
+
+    def unpack(self):
+        return unpack_from(">h", self.cache[-2:])
 
 class TAG_Int(TAG):
     id = 3
 
-    @staticmethod
-    def parse_payload(base, offset):
-        return None, offset+4
+    def parse_payload(self, base, offset):
+        return offset+4
 
 class TAG_Long(TAG):
     id = 4
 
-    @staticmethod
-    def parse_payload(base, offset):
-        return None, offset+8
+    def parse_payload(self, base, offset):
+        return offset+8
 
 class TAG_Float(TAG):
     id = 5
 
-    @staticmethod
-    def parse_payload(base, offset):
-        return None, offset+4
+    def parse_payload(self, base, offset):
+        return offset+4
 
 class TAG_Double(TAG):
     id = 6
 
-    @staticmethod
-    def parse_payload(base, offset):
-        return None, offset+8
+    def parse_payload(self, base, offset):
+        return offset+8
 
 class TAG_Byte_Array(TAG):
     id = 7
 
-    @staticmethod
-    def parse_payload(base, offset):
+    def parse_payload(self, base, offset):
         l, = unpack_from('>i',base, offset)
-        return None, offset+4+l*1
+        return offset+4+l*1
 
 class TAG_String(TAG):
     id = 8
 
-    @staticmethod
-    def parse_payload(base, offset):
+    def parse_payload(self, base, offset):
         l, = unpack_from('>h',base, offset)
-        return None, offset+2+l
+        return offset+2+l
 
 class TAG_List(TAG):
     id = 9
 
-    @staticmethod
-    def parse_payload(base, offset):
+    def parse_payload(self, base, offset):
         tag, offset = TAG.parse_tag(base, offset)
         count, = unpack_from('>i',base, offset)
         offset += 4
@@ -129,11 +140,12 @@ class TAG_List(TAG):
         items = []
         while count > 0:
           item = tag()
-          item.payload,offset = item.parse_payload(base, offset)
+          offset = item.parse_payload(base, offset)
           items.append(item)
           count -= 1
-        
-        return items,offset
+       
+        self.items = items
+        return offset
 
 class TAG_Compound(TAG):
     id = 10
@@ -143,16 +155,27 @@ class TAG_Compound(TAG):
                 ", ".join(repr(item) for item in items) +\
                 ")"
 
-    @staticmethod
-    def parse_payload(base, offset):
-        items = []
+    def parse_payload(self, base, offset):
+        items = {}
         while True:
           item, offset = TAG.parse(base, offset)
           if type(item) is TAG_End:
             break
-          items.append(item)
+          items[item.name] = item
           
-        return items,offset
+        self.items = items
+        return offset
+
+    def keys(self):
+        return self.items.keys()
+
+    def __getitem__(self, name):
+        item = self.items[name]
+
+        return item
+
+    def __getattr__(self, name):
+        return self[name]
 
 TAG.datatypes = { t.id: t for t in (
     TAG_End,

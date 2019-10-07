@@ -18,7 +18,7 @@ class TestTags(unittest.TestCase):
         offset = 0
         id, offset = t.parse_id(data, offset)
         name, offset = t.parse_name(data, offset)
-        payload, offset = t.parse_payload(data, offset)
+        offset = t.parse_payload(data, offset)
 
         self.assertEqual(data[offset:], b"")
         self.assertEqual(id, 2)
@@ -58,6 +58,27 @@ class TestCache(unittest.TestCase):
           t, offset = TAG.parse(data, 0)
 
         self.assertEqual(t.cache, data)
+
+class TestCompoundTag(unittest.TestCase):
+    def test_keys(self):
+        t = TAG.parse_file("test/data/level.dat")
+        self.assertEqual(list(t.keys()), ['Data'])
+
+    def test_get_attr(self):
+        t = TAG.parse_file("test/data/level.dat")
+        item = t.Data
+        self.assertIn('DataPacks', list(item.keys()))
+        self.assertIn('GameRules', list(item.keys()))
+
+    def test_get_item(self):
+        t = TAG.parse_file("test/data/level.dat")
+        item = t['Data']
+        self.assertIn('DataPacks', list(item.keys()))
+        self.assertIn('GameRules', list(item.keys()))
+
+    def test_get_value(self):
+        t, _ = TAG.parse(bytes.fromhex("02  00 09  73 68 6F 72 74 54 65 73 74  7F FF"), 0)
+        self.assertEqual(t.value, 32767)
 
 
 
