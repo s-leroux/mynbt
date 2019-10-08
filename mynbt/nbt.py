@@ -89,9 +89,23 @@ class TAG:
 
     @staticmethod
     def parse_file(path):
-        with gzip.open(path, "rb") as f:
-          data = f.read()
-          result, name, offset = TAG.parse(data, 0)
+        readers = (
+          gzip.open,
+          open,
+        )
+        
+        err = None
+        for reader in readers:
+          try:
+            with reader(path, "rb") as f:
+              data = f.read()
+            break
+          except OSError as e:
+            err = e
+        else:
+          raise err or OSError("Can't open " + path)
+
+        result, name, offset = TAG.parse(data, 0)
 
         assert data[offset:] == b""
         return result

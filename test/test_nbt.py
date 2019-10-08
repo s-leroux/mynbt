@@ -83,7 +83,15 @@ class TestParseTags(unittest.TestCase):
 
 class TestParseFiles(unittest.TestCase):
     def test_parse_level(self):
+        """ It should load uncompressed NBT files
+        """
         t = TAG.parse_file("test/data/level.dat")
+        self.assertIsInstance(t, TAG_Compound)
+
+    def test_parse_server(self):
+        """ It should load uncompressed NBT files
+        """
+        t = TAG.parse_file("test/data/servers.dat")
         self.assertIsInstance(t, TAG_Compound)
 
 class TestListTag(unittest.TestCase):
