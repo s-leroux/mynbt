@@ -50,6 +50,11 @@ class TestRefSlices(unittest.TestCase):
         b = rslice(a,1,None)
         self.assertEqual(b, a[1:])
 
+    def test_slice_from_end(self):
+        a = [*range(10)]
+        b = rslice(a,-2,None)
+        self.assertEqual(b, a[-2:])
+
     def test_slice_from_start(self):
         a = [*range(10)]
         b = rslice(a,None, 4)
@@ -68,25 +73,86 @@ class TestRefSlices(unittest.TestCase):
 class TestNestedSlices(unittest.TestCase):
     def setUp(self):
       self.base = b"ABCDEFGHIJK"
-      self.slice = rslice(self.base)
+      self.slice = rslice(self.base, 1, len(self.base)-1)
 
-    def test_nested(self):
+    def test_nested_1(self):
       nested = self.slice[:]
       self.assertIs(nested.base, self.slice.base)
-      self.assertEqual(nested.start, 0)
-      self.assertEqual(nested.stop, len(self.base))
+      self.assertEqual(nested.start, self.slice.start)
+      self.assertEqual(nested.stop, self.slice.stop)
 
-      nested = self.slice[1:-1]
+    def test_nested_2(self):
+      nested = self.slice[2:-2]
       self.assertIs(nested.base, self.slice.base)
-      self.assertEqual(nested.start, 1)
-      self.assertEqual(nested.stop, len(self.base)-1)
+      self.assertEqual(nested.start, self.slice.start+2)
+      self.assertEqual(nested.stop, self.slice.stop-2)
+
+    def test_nested_3(self):
+      nested = self.slice[2:]
+      self.assertIs(nested.base, self.slice.base)
+      self.assertEqual(nested.start, self.slice.start+2)
+      self.assertEqual(nested.stop, self.slice.stop)
+
+    def test_nested_4(self):
+      nested = self.slice[-2:]
+      self.assertIs(nested.base, self.slice.base)
+      self.assertEqual(nested.start, self.slice.stop-2)
+      self.assertEqual(nested.stop, self.slice.stop)
+
+    def test_nested_5(self):
+      nested = self.slice[:-2]
+      self.assertIs(nested.base, self.slice.base)
+      self.assertEqual(nested.start, self.slice.start)
+      self.assertEqual(nested.stop, self.slice.stop-2)
+
+    def test_nested_6(self):
+      """ nested slices shouldn't escape parent's boundaries
+      """
+      nested = self.slice[:100]
+      self.assertIs(nested.base, self.slice.base)
+      self.assertEqual(nested.start, self.slice.start)
+      self.assertEqual(nested.stop, self.slice.stop)
+
+    def test_nested_7(self):
+      """ nested slices shouldn't escape parent's boundaries
+      """
+      nested = self.slice[-100:]
+      self.assertIs(nested.base, self.slice.base)
+      self.assertEqual(nested.start, self.slice.start)
+      self.assertEqual(nested.stop, self.slice.stop)
+
+    def test_nested_8(self):
+      """ nested slices shouldn't escape parent's boundaries
+      """
+      nested = self.slice[100:]
+      self.assertIs(nested.base, self.slice.base)
+      self.assertEqual(nested.start, self.slice.stop)
+      self.assertEqual(nested.stop, self.slice.stop)
 
     def test_nested_get_item(self):
       nested = self.slice[1:-1]
       nested = nested[1:-1]
       nested = nested[1:-1]
-      self.assertEqual(nested[1], self.base[4])
-      self.assertEqual(len(nested), len(self.base)-6)
+      self.assertEqual(nested[1], self.base[5])
+      self.assertEqual(len(nested), len(self.base)-8)
+
+class TestBytesSlice(unittest.TestCase):
+    def test_bytes_slice(self):
+      data = b"0123456"
+      b = rslice(data)
+
+      self.assertEqual(b[0], data[0])
+      self.assertEqual(b[1], data[1])
+      self.assertEqual(b[2], data[2])
+      self.assertEqual(b[3], data[3])
+      self.assertEqual(b[4], data[4])
+      self.assertEqual(b[5], data[5])
+      self.assertEqual(b[6], data[6])
+
+    def test_bytes_slice_to_bytes(self):
+      b = rslice(b"0123456")
+
+      self.assertEqual(bytes(b), b"0123456")
 
 class TestSliceMath(unittest.TestCase):
     def setUp(self):

@@ -79,7 +79,7 @@ class TestParseTags(unittest.TestCase):
         self.assertIsInstance(t, TAG_Short)
         self.assertEqual(t._id, 2)
         self.assertEqual(name, "shortTest")
-        self.assertEqual(t._payload, bytes.fromhex("7F FF"))
+        self.assertEqual(bytes(t._payload), bytes.fromhex("7F FF"))
 
 class TestParseFiles(unittest.TestCase):
     def test_parse_level(self):
@@ -179,8 +179,6 @@ class TestCompoundTag(unittest.TestCase):
 
     def test_del_item(self):
         nbt, *_ = TAG.parse(bytes.fromhex(SOME_NESTED_COMPOUND), 0)
-        print(nbt)
-        print(nbt.Comp)
         self.assertEqual(len(nbt.Comp), 2)
         self.assertEqual(nbt.Comp['byteTest'].value, 127)
         self.assertEqual(nbt.Comp['shortTest'].value, 32767)
@@ -220,7 +218,7 @@ class TestCache(unittest.TestCase):
           data = f.read()
           t, _, offset = TAG.parse(data, 0)
 
-        self.assertEqual(t._payload, data[3:])
+        self.assertEqual(bytes(t._payload), data[3:])
 
     def test_parent_tracking(self):
         """ Nested elements shoud track their parent as weak links

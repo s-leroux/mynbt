@@ -1,7 +1,8 @@
 import gzip
-from struct import unpack_from
+from struct import unpack
 from weakref import WeakSet
 import collections
+from .utils import rslice
 
 class TAG:
     datatypes = {}
@@ -56,13 +57,13 @@ class TAG:
 
     @staticmethod
     def parse_id(base, offset):
-        id, = unpack_from('>B',base, offset)
+        id, = unpack('>B',bytes(base[offset:offset+1]))
         return id,offset+1
 
     @staticmethod
     def parse_name(base, offset):
-        l, = unpack_from('>h',base, offset)
-        name = base[offset+2:offset+2+l].decode("utf8")
+        l, = unpack('>h',bytes(base[offset:offset+2]))
+        name = bytes(base[offset+2:offset+2+l]).decode("utf8")
         return name,offset+2+l
 
     @staticmethod
@@ -75,6 +76,7 @@ class TAG:
 
     @staticmethod
     def parse(base, offset, parent = None):
+        base = rslice(base)
         start = offset
         name = None
         tag, offset = TAG.parse_tag(base,offset)
@@ -104,7 +106,7 @@ class TAG_Byte(TAG):
         return base[offset:offset+1], offset+1
 
     def unpack(self):
-        return unpack_from(">b", self._payload[-1:])
+        return unpack(">b", bytes(self._payload))
 
 class TAG_Short(TAG):
     id = 2
@@ -113,7 +115,7 @@ class TAG_Short(TAG):
         return base[offset:offset+2], offset+2
 
     def unpack(self):
-        return unpack_from(">h", self._payload[-2:])
+        return unpack(">h", bytes(self._payload))
 
 class TAG_Int(TAG):
     id = 3
@@ -143,14 +145,14 @@ class TAG_Byte_Array(TAG):
     id = 7
 
     def parse_payload(self, base, offset):
-        l, = unpack_from('>i',base, offset)
+        l, = unpack('>i',bytes(base[offset:offset+4]))
         return base[offset:offset+4+l*1], offset+4+l*1
 
 class TAG_String(TAG):
     id = 8
 
     def parse_payload(self, base, offset):
-        l, = unpack_from('>h',base, offset)
+        l, = unpack('>h',bytes(base[offset:offset+2]))
         return base[offset:offset+2+l], offset+2+l
 
 class TAG_List(TAG, collections.abc.MutableSequence, collections.abc.Hashable):
@@ -168,7 +170,7 @@ class TAG_List(TAG, collections.abc.MutableSequence, collections.abc.Hashable):
     def parse_payload(self, base, offset):
         start = offset
         tag, offset = TAG.parse_tag(base, offset)
-        count, = unpack_from('>i',base, offset)
+        count, = unpack('>i',bytes(base[offset:offset+4]))
         offset += 4
         # XXX Check implications of that statement:
         # """ If the length of the list is 0 or negative, 

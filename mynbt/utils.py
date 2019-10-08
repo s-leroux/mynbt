@@ -6,11 +6,11 @@ class Slice:
         if start is None:
             start = 0
         elif start < 0:
-            start += len(base)
+            start = max(0, start+len(base))
         if stop is None:
             stop = len(base)
         elif stop < 0:
-            stop += len(base)
+            stop = max(0, stop+len(base))
 
         if stop > len(base):
             stop = len(base)
@@ -52,11 +52,7 @@ class Slice:
         elif type(idx) is slice:
             if idx.step is not None:
                 raise TypeError("step slices are not supported")
-            istart = 0 if idx.start is None else idx.start
-            istop = self.stop if idx.stop is None else idx.stop
-            return Slice(self.base,
-                    istart + (self.start if istart >= 0 else self.stop),
-                    istop + (self.start if istop >= 0 else self.stop))
+            return Slice(self, idx.start, idx.stop)
 
     def __add__(self, other):
         if type(other) is not Slice:
