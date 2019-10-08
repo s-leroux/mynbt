@@ -2,7 +2,6 @@ import gzip
 from struct import unpack, iter_unpack
 from weakref import WeakSet
 import collections
-from .utils import rslice
 
 class TAG:
     datatypes = {}
@@ -76,7 +75,7 @@ class TAG:
 
     @staticmethod
     def parse(base, offset, parent = None):
-        base = rslice(base)
+        base = memoryview(base)
         start = offset
         name = None
         tag, offset = TAG.parse_tag(base,offset)
