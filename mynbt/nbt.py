@@ -1,6 +1,7 @@
 import gzip
 from struct import unpack_from
 from weakref import WeakSet
+import collections
 
 class TAG:
     datatypes = {}
@@ -102,6 +103,9 @@ class TAG_Byte(TAG):
     def parse_payload(self, base, offset):
         return base[offset:offset+1], offset+1
 
+    def unpack(self):
+        return unpack_from(">b", self._payload[-1:])
+
 class TAG_Short(TAG):
     id = 2
 
@@ -149,7 +153,7 @@ class TAG_String(TAG):
         l, = unpack_from('>h',base, offset)
         return base[offset:offset+2+l], offset+2+l
 
-class TAG_List(TAG):
+class TAG_List(TAG, collections.abc.MutableSequence, collections.abc.Hashable):
     id = 9
 
     def __init__(self, *args, **kwargs):
@@ -200,6 +204,15 @@ class TAG_List(TAG):
     def get_value(self):
         return self
 
+    #------------------------------------
+    # Hashable interface
+    #------------------------------------
+    def __hash__(self):
+        return id(self)
+
+    #------------------------------------
+    # Mutable sequence interface
+    #------------------------------------
     def __getitem__(self, idx):
         item = self._items[idx]
 
@@ -209,14 +222,18 @@ class TAG_List(TAG):
         self.invalidate()
         self._items[idx] = value # XXX should promote native values to TAG_... ?
 
+    def __delitem__(self, idx):
+        self.invalidate()
+        del self._items[idx]
+
+    def __len__(self):
+        return len(self._items)
+
     def insert(self, idx, value):
         self.invalidate()
         self._items.insert(idx, value)
 
-    def append(self, value):
-        self.insert(len(self._items), value)
-
-class TAG_Compound(TAG):
+class TAG_Compound(TAG, collections.abc.MutableMapping, collections.abc.Hashable):
     id = 10
 
     def __init__(self, *args, **kwargs):
@@ -225,7 +242,7 @@ class TAG_Compound(TAG):
 
     def __repr__(self):
         return super().__repr__() + " {" +\
-                ", ".join(repr(item) for item in self._items.values()) +\
+                ", ".join(name + ": " + repr(item) for name, item in self._items.items()) +\
                 "}"
 
     def parse_payload(self, base, offset):
@@ -259,15 +276,37 @@ class TAG_Compound(TAG):
     def get_value(self):
         return self
 
-    def __getitem__(self, name):
-        item = self._items[name]
+    #------------------------------------
+    # Hashable interface
+    #------------------------------------
+    def __hash__(self):
+        return id(self)
+
+    #------------------------------------
+    # Mutable mapping interface
+    #------------------------------------
+    def __getitem__(self, idx):
+        item = self._items[idx]
 
         return item
 
-    def __setitem__(self, name, value):
+    def __setitem__(self, idx, value):
         self.invalidate()
-        self._items[name] = value # XXX should promote native values to TAG_... ?
+        self._items[idx] = value # XXX should promote native values to TAG_... ?
 
+    def __delitem__(self, idx):
+        self.invalidate()
+        del self._items[idx]
+
+    def __len__(self):
+        return len(self._items)
+
+    def __iter__(self):
+        return self._items.__iter__()
+
+    #------------------------------------
+    # Mutable object interface
+    #------------------------------------
     def __getattr__(self, name):
         return self[name]
 
@@ -276,6 +315,12 @@ class TAG_Compound(TAG):
           object.__setattr__(self,name,value)
         else:
           self[name] = value
+
+    def __delattr__(self, name):
+        if name.startswith("_"):
+          object.__delattr__(self,name)
+        else:
+          del self[name]
 
 TAG.datatypes = { t.id: t for t in (
     TAG_End,

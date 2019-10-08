@@ -1,6 +1,11 @@
 import unittest
 
 from mynbt.nbt import *
+SOME_BYTE = "".join((
+  "01",                     # tag
+  "00 08", b"byteTest".hex(),   # name
+  "7F"                      # value
+))
 SOME_SHORT = "".join((
   "02",                     # tag
   "00 09", b"shortTest".hex(),   # name
@@ -12,6 +17,7 @@ SOME_COMPOUND = "".join((
 
   # payload
   SOME_SHORT,
+  SOME_BYTE,
   "00"                      #end
 ))
 SOME_NESTED_COMPOUND = "".join((
@@ -83,16 +89,16 @@ class TestParseFiles(unittest.TestCase):
 class TestListTag(unittest.TestCase):
     def test_parse_list(self):
         data = bytes.fromhex(SOME_LIST + "FF")
-        t, name, offset = TAG.parse(data, 0)
+        nbt, name, offset = TAG.parse(data, 0)
         self.assertEqual(data[offset:], b"\xFF")
-        self.assertIsInstance(t, TAG_List)
-        self.assertEqual(len(t._items), 4)
-        self.assertEqual(t[0].value, 0)
-        self.assertEqual(t[1].value, 1)
-        self.assertEqual(t[2].value, 2)
-        self.assertEqual(t[3].value, 3)
+        self.assertIsInstance(nbt, TAG_List)
+        self.assertEqual(len(nbt), 4)
+        self.assertEqual(nbt[0].value, 0)
+        self.assertEqual(nbt[1].value, 1)
+        self.assertEqual(nbt[2].value, 2)
+        self.assertEqual(nbt[3].value, 3)
         with self.assertRaises(IndexError):
-          self.assertEqual(t[4].value, 4)
+          self.assertEqual(nbt[4].value, 4)
 
     def test_set_item(self):
         nbt, *_ = TAG.parse(bytes.fromhex(SOME_LIST), 0)
@@ -111,10 +117,31 @@ class TestListTag(unittest.TestCase):
         with self.assertRaises(IndexError):
           self.assertEqual(nbt[4].value, 4)
         self.assertIsNotNone(nbt._payload)
+
         nbt.append(val)
+
         self.assertIs(nbt[4], val)
         self.assertIsNone(nbt._payload)
+
+    def test_del_item(self):
+        nbt, *_ = TAG.parse(bytes.fromhex(SOME_LIST), 0)
+        self.assertEqual(len(nbt), 4)
+        self.assertEqual(nbt[0].value, 0)
+        self.assertEqual(nbt[1].value, 1)
+        self.assertEqual(nbt[2].value, 2)
+        self.assertEqual(nbt[3].value, 3)
+        with self.assertRaises(IndexError):
+          self.assertEqual(nbt[4].value, 4)
+
+        del nbt[1]
         
+        self.assertIsNone(nbt._payload)
+        self.assertEqual(len(nbt), 3)
+        self.assertEqual(nbt[0].value, 0)
+        self.assertEqual(nbt[1].value, 2)
+        self.assertEqual(nbt[2].value, 3)
+        with self.assertRaises(IndexError):
+          self.assertEqual(nbt[3].value, 4)
 
 class TestCompoundTag(unittest.TestCase):
     def test_keys(self):
@@ -150,10 +177,26 @@ class TestCompoundTag(unittest.TestCase):
         t, *_ = TAG.parse(bytes.fromhex(SOME_NESTED_COMPOUND), 0)
         self.assertEqual(t.Comp.shortTest.value, 32767)
 
+    def test_del_item(self):
+        nbt, *_ = TAG.parse(bytes.fromhex(SOME_NESTED_COMPOUND), 0)
+        print(nbt)
+        print(nbt.Comp)
+        self.assertEqual(len(nbt.Comp), 2)
+        self.assertEqual(nbt.Comp['byteTest'].value, 127)
+        self.assertEqual(nbt.Comp['shortTest'].value, 32767)
+
+        del nbt.Comp.shortTest
+        
+        self.assertIsNone(nbt._payload)
+        self.assertEqual(len(nbt.Comp), 1)
+        self.assertEqual(nbt.Comp['byteTest'].value, 127)
+        with self.assertRaises(KeyError):
+          self.assertEqual(nbt.Comp['shortTest'].value, 32767)
+
 class TestExport(unittest.TestCase):
     CASES = (
       dict(dump=SOME_SHORT, value=32767, extended={'type': 'TAG_Short', 'value': 32767}),
-      dict(dump=SOME_COMPOUND, value=dict(shortTest=32767), extended=dict(type='TAG_Compound', value={'shortTest': {'type': 'TAG_Short', 'value': 32767}})),
+      dict(dump=SOME_COMPOUND, value=dict(shortTest=32767, byteTest=127), extended=dict(type='TAG_Compound', value={'shortTest': {'type': 'TAG_Short', 'value': 32767}, 'byteTest':{'type':'TAG_Byte', 'value':127}})),
     )
 
     def test_export_short(self):
