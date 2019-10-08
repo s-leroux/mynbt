@@ -1,5 +1,5 @@
 import gzip
-from struct import unpack
+from struct import unpack, iter_unpack
 from weakref import WeakSet
 import collections
 from .utils import rslice
@@ -8,7 +8,7 @@ class TAG:
     datatypes = {}
 
     def __init__(self, value = None, parent = None):
-        self._id = self.__class__.id
+        self._id = self.__class__.ID
         self._value = value
         self._parents = WeakSet()
         self.register_parent(parent)
@@ -32,7 +32,7 @@ class TAG:
             item._payload = None
             queue.extend(item._parents)
 
-    def export(self, compact=True):
+    def export(self, *, compact=True):
         """ Export a NBT data structure as Python native objects.
         """
         value = self.value
@@ -51,14 +51,14 @@ class TAG:
 
     def get_value(self):
         if self._value is None:
-          self._value, = self.unpack()
+          self._value = self.unpack()
 
         return self._value
 
     @staticmethod
     def parse_id(base, offset):
-        id, = unpack('>B',bytes(base[offset:offset+1]))
-        return id,offset+1
+        ID, = unpack('>B',bytes(base[offset:offset+1]))
+        return ID,offset+1
 
     @staticmethod
     def parse_name(base, offset):
@@ -68,9 +68,9 @@ class TAG:
 
     @staticmethod
     def parse_tag(base, offset):
-        id,offset = TAG.parse_id(base, offset)
-        tag = TAG.datatypes[id]
-        assert tag.id == id
+        ID,offset = TAG.parse_id(base, offset)
+        tag = TAG.datatypes[ID]
+        assert tag.ID == ID
 
         return tag, offset
 
@@ -111,66 +111,92 @@ class TAG:
         return result
 
 class TAG_End(TAG):
-    id = 0
+    ID = 0
 
-class TAG_Byte(TAG):
-    id = 1
+class Atom:
+    def __repr__(self):
+        return super().__repr__() + " " + str(self.value)
 
     def parse_payload(self, base, offset):
-        return base[offset:offset+1], offset+1
+        return base[offset:offset+self.SIZE], offset+self.SIZE
 
     def unpack(self):
-        return unpack(">b", bytes(self._payload))
+        return unpack(self.FORMAT, bytes(self._payload))[0]
 
-class TAG_Short(TAG):
-    id = 2
-
-    def parse_payload(self, base, offset):
-        return base[offset:offset+2], offset+2
-
-    def unpack(self):
-        return unpack(">h", bytes(self._payload))
-
-class TAG_Int(TAG):
-    id = 3
-
-    def parse_payload(self, base, offset):
-        return base[offset:offset+2], offset+4
-
-class TAG_Long(TAG):
-    id = 4
-
-    def parse_payload(self, base, offset):
-        return base[offset:offset+8], offset+8
-
-class TAG_Float(TAG):
-    id = 5
-
-    def parse_payload(self, base, offset):
-        return base[offset:offset+4], offset+4
-
-class TAG_Double(TAG):
-    id = 6
-
-    def parse_payload(self, base, offset):
-        return base[offset:offset+8], offset+8
-
-class TAG_Byte_Array(TAG):
-    id = 7
+class Array:
+    def __repr__(self):
+        return super().__repr__() + " " + repr(self.value)
 
     def parse_payload(self, base, offset):
         l, = unpack('>i',bytes(base[offset:offset+4]))
-        return base[offset:offset+4+l*1], offset+4+l*1
+        return base[offset:offset+4+l*self.SIZE], offset+4+l*self.SIZE
+
+    def unpack(self):
+        return list(iter_unpack(self.FORMAT, bytes(self._payload[4:])))
+
+class TAG_Byte(Atom, TAG):
+    ID = 1
+    SIZE = 1
+    FORMAT = ">b"
+
+    #def parse_payload(self, base, offset):
+    #    return base[offset:offset+1], offset+1
+    #
+    #def unpack(self):
+    #    return unpack(">b", bytes(self._payload))
+
+class TAG_Short(Atom, TAG):
+    ID = 2
+    SIZE = 2
+    FORMAT = ">h"
+
+class TAG_Int(Atom, TAG):
+    ID = 3
+    SIZE = 4
+    FORMAT = ">i"
+
+class TAG_Long(Atom, TAG):
+    ID = 4
+    SIZE = 8
+    FORMAT = ">q"
+
+class TAG_Float(Atom, TAG):
+    ID = 5
+    SIZE = 4
+    FORMAT = ">f"
+
+class TAG_Double(Atom, TAG):
+    ID = 6
+    SIZE = 8
+    FORMAT = ">d"
+
+class TAG_Byte_Array(Array, TAG):
+    ID = 7
+    SIZE = 1
+    FORMAT = ">b"
+
+class TAG_Int_Array(Array, TAG):
+    ID = 11
+    SIZE = 4
+    FORMAT = ">i"
+
+class TAG_Long_Array(Array, TAG):
+    ID = 12
+    SIZE = 8
+    FORMAT = ">q"
 
 class TAG_String(TAG):
-    id = 8
+    ID = 8
 
     def parse_payload(self, base, offset):
         l, = unpack('>h',bytes(base[offset:offset+2]))
         return base[offset:offset+2+l], offset+2+l
 
+    def unpack(self):
+        return bytes(self._payload[2:]).decode("utf8")
+
 class TAG_List(TAG, collections.abc.MutableSequence, collections.abc.Hashable):
-    id = 9
+    ID = 9
 
     def __init__(self, *args, **kwargs):
         self._items = []
@@ -178,7 +204,7 @@ class TAG_List(TAG, collections.abc.MutableSequence, collections.abc.Hashable):
 
     def __repr__(self):
         return super().__repr__() + " {" +\
-                ", ".join(repr(item) for item in self._items.values()) +\
+                ", ".join(repr(item) for item in self._items) +\
                 "}"
 
     def parse_payload(self, base, offset):
@@ -204,10 +230,10 @@ class TAG_List(TAG, collections.abc.MutableSequence, collections.abc.Hashable):
         self._items = items
         return base[start:offset], offset
 
-    def export(self, compact=True):
+    def export(self, *, compact=True):
         """ Export a NBT data structure as Python native objects.
         """
-        value = [v.export(compact) for v in self._items]
+        value = [v.export(compact=compact) for v in self._items]
 
         if compact:
           return value
@@ -250,7 +276,7 @@ class TAG_List(TAG, collections.abc.MutableSequence, collections.abc.Hashable):
         self._items.insert(idx, value)
 
 class TAG_Compound(TAG, collections.abc.MutableMapping, collections.abc.Hashable):
-    id = 10
+    ID = 10
 
     def __init__(self, *args, **kwargs):
         self._items = {}
@@ -276,10 +302,10 @@ class TAG_Compound(TAG, collections.abc.MutableMapping, collections.abc.Hashable
     def keys(self):
         return self._items.keys()
 
-    def export(self, compact=True):
+    def export(self, *, scope=None, compact=True):
         """ Export a NBT data structure as Python native objects.
         """
-        value = {k: v.export(compact) for k, v in self._items.items()}
+        value = {k: v.export(compact=compact) for k, v in self._items.items() if (scope is None) or (k in scope)}
 
         if compact:
           return value
@@ -338,7 +364,7 @@ class TAG_Compound(TAG, collections.abc.MutableMapping, collections.abc.Hashable
         else:
           del self[name]
 
-TAG.datatypes = { t.id: t for t in (
+TAG.datatypes = { t.ID: t for t in (
     TAG_End,
     TAG_Byte,
     TAG_Short,
@@ -349,7 +375,9 @@ TAG.datatypes = { t.id: t for t in (
     TAG_Byte_Array,
     TAG_String,
     TAG_List,
-    TAG_Compound
+    TAG_Compound,
+    TAG_Int_Array,
+    TAG_Long_Array,
         )}
 
 class NBTNode:
