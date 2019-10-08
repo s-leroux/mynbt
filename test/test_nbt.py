@@ -28,7 +28,16 @@ EMPTY_COMPOUND = "".join((
   "00 05", b"Empty".hex(),  # name
   "00"                      #end
 ))
-
+SOME_LIST = "".join((
+  "09"
+  "00 04", b"List".hex(),
+  "02",                     # paylod tag id
+  "00 00 00 04"             # count
+  "00 00",
+  "00 01",
+  "00 02",
+  "00 03",
+))
 
 class TestTags(unittest.TestCase):
     def test_TAG_End(self):
@@ -46,12 +55,12 @@ class TestTags(unittest.TestCase):
         offset = 0
         id, offset = t.parse_id(data, offset)
         name, offset = t.parse_name(data, offset)
-        offset = t.parse_payload(data, offset)
+        payload, offset = t.parse_payload(data, offset)
 
         self.assertEqual(data[offset:], b"")
         self.assertEqual(id, 2)
         self.assertEqual(name, "shortTest")
-        #self.assertEqual(payload, bytes.fromhex("7F FF"))
+        self.assertEqual(payload, bytes.fromhex("7F FF"))
 
 class TestParseTags(unittest.TestCase):
     def test_parse_end(self):
@@ -64,19 +73,48 @@ class TestParseTags(unittest.TestCase):
         self.assertIsInstance(t, TAG_Short)
         self.assertEqual(t._id, 2)
         self.assertEqual(name, "shortTest")
-        #self.assertEqual(t.payload, bytes.fromhex("7F FF"))
-
-    def test_parse_list(self):
-        data = bytes.fromhex("09  00 04 4c 69 73 74  01 00 00 00 02  01  02  FF")
-        t, name, offset = TAG.parse(data, 0)
-        self.assertEqual(data[offset:], b"\xFF")
-        self.assertIsInstance(t, TAG_List)
-        #self.assertEqual(len(t.payload), 2)
+        self.assertEqual(t._payload, bytes.fromhex("7F FF"))
 
 class TestParseFiles(unittest.TestCase):
     def test_parse_level(self):
         t = TAG.parse_file("test/data/level.dat")
         self.assertIsInstance(t, TAG_Compound)
+
+class TestListTag(unittest.TestCase):
+    def test_parse_list(self):
+        data = bytes.fromhex(SOME_LIST + "FF")
+        t, name, offset = TAG.parse(data, 0)
+        self.assertEqual(data[offset:], b"\xFF")
+        self.assertIsInstance(t, TAG_List)
+        self.assertEqual(len(t._items), 4)
+        self.assertEqual(t[0].value, 0)
+        self.assertEqual(t[1].value, 1)
+        self.assertEqual(t[2].value, 2)
+        self.assertEqual(t[3].value, 3)
+        with self.assertRaises(IndexError):
+          self.assertEqual(t[4].value, 4)
+
+    def test_set_item(self):
+        nbt, *_ = TAG.parse(bytes.fromhex(SOME_LIST), 0)
+        val, *_ = TAG.parse(bytes.fromhex(SOME_SHORT), 0)
+
+        self.assertIsNot(nbt[0], val)
+        self.assertIsNotNone(nbt._payload)
+        nbt[0] = val
+        self.assertIs(nbt[0], val)
+        self.assertIsNone(nbt._payload)
+
+    def test_append(self):
+        nbt, *_ = TAG.parse(bytes.fromhex(SOME_LIST), 0)
+        val, *_ = TAG.parse(bytes.fromhex(SOME_SHORT), 0)
+
+        with self.assertRaises(IndexError):
+          self.assertEqual(nbt[4].value, 4)
+        self.assertIsNotNone(nbt._payload)
+        nbt.append(val)
+        self.assertIs(nbt[4], val)
+        self.assertIsNone(nbt._payload)
+        
 
 class TestCompoundTag(unittest.TestCase):
     def test_keys(self):
@@ -139,7 +177,7 @@ class TestCache(unittest.TestCase):
           data = f.read()
           t, _, offset = TAG.parse(data, 0)
 
-        self.assertEqual(t._cache, data)
+        self.assertEqual(t._payload, data[3:])
 
     def test_parent_tracking(self):
         """ Nested elements shoud track their parent as weak links
@@ -167,10 +205,10 @@ class TestCache(unittest.TestCase):
         # print(child2)
         # print(data)
 
-        self.assertIsNone(data._cache)
-        self.assertIsNone(child1._cache)
-        self.assertIsNotNone(child2._cache)
-        self.assertIsNone(t._cache)
+        self.assertIsNone(data._payload)
+        self.assertIsNone(child1._payload)
+        self.assertIsNotNone(child2._payload)
+        self.assertIsNone(t._payload)
 
 class TestSetValue(unittest.TestCase):
     def test_set_value_atom_fail(self):

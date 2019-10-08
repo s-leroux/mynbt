@@ -13,7 +13,7 @@ class TAG:
 
     def __repr__(self):
         attr=[]
-        if self._cache is not None:
+        if self._payload is not None:
           attr.append("cached")
 
         return "{tag}({attr})".format(tag=self.__class__.__name__, attr=", ".join(attr))
@@ -26,8 +26,8 @@ class TAG:
         queue = [self]
         while queue:
           item = queue.pop()
-          if item._cache:
-            item._cache = None
+          if item._payload:
+            item._payload = None
             queue.extend(item._parents)
 
     def export(self, compact=True):
@@ -80,9 +80,7 @@ class TAG:
         result = tag(parent=parent)
         if tag is not TAG_End:
           name, offset = result.parse_name(base, offset)
-          offset = result.parse_payload(base, offset)
-
-        result._cache = base[start:offset]
+          result._payload, offset = result.parse_payload(base, offset)
 
         return result, name, offset
 
@@ -102,59 +100,69 @@ class TAG_Byte(TAG):
     id = 1
 
     def parse_payload(self, base, offset):
-        return offset+1
+        return base[offset:offset+1], offset+1
 
 class TAG_Short(TAG):
     id = 2
 
     def parse_payload(self, base, offset):
-        return offset+2
+        return base[offset:offset+2], offset+2
 
     def unpack(self):
-        return unpack_from(">h", self._cache[-2:])
+        return unpack_from(">h", self._payload[-2:])
 
 class TAG_Int(TAG):
     id = 3
 
     def parse_payload(self, base, offset):
-        return offset+4
+        return base[offset:offset+2], offset+4
 
 class TAG_Long(TAG):
     id = 4
 
     def parse_payload(self, base, offset):
-        return offset+8
+        return base[offset:offset+8], offset+8
 
 class TAG_Float(TAG):
     id = 5
 
     def parse_payload(self, base, offset):
-        return offset+4
+        return base[offset:offset+4], offset+4
 
 class TAG_Double(TAG):
     id = 6
 
     def parse_payload(self, base, offset):
-        return offset+8
+        return base[offset:offset+8], offset+8
 
 class TAG_Byte_Array(TAG):
     id = 7
 
     def parse_payload(self, base, offset):
         l, = unpack_from('>i',base, offset)
-        return offset+4+l*1
+        return base[offset:offset+4+l*1], offset+4+l*1
 
 class TAG_String(TAG):
     id = 8
 
     def parse_payload(self, base, offset):
         l, = unpack_from('>h',base, offset)
-        return offset+2+l
+        return base[offset:offset+2+l], offset+2+l
 
 class TAG_List(TAG):
     id = 9
 
+    def __init__(self, *args, **kwargs):
+        self._items = []
+        super().__init__(*args, **kwargs)
+
+    def __repr__(self):
+        return super().__repr__() + " {" +\
+                ", ".join(repr(item) for item in self._items.values()) +\
+                "}"
+
     def parse_payload(self, base, offset):
+        start = offset
         tag, offset = TAG.parse_tag(base, offset)
         count, = unpack_from('>i',base, offset)
         offset += 4
@@ -169,12 +177,44 @@ class TAG_List(TAG):
         items = []
         while count > 0:
           item = tag(parent=self)
-          offset = item.parse_payload(base, offset)
+          item._payload, offset = item.parse_payload(base, offset)
           items.append(item)
           count -= 1
        
-        self.items = items
-        return offset
+        self._items = items
+        return base[start:offset], offset
+
+    def export(self, compact=True):
+        """ Export a NBT data structure as Python native objects.
+        """
+        value = [v.export(compact) for v in self._items]
+
+        if compact:
+          return value
+        else:
+          return {
+            'type': self.__class__.__name__,
+            'value': value
+          }
+
+    def get_value(self):
+        return self
+
+    def __getitem__(self, idx):
+        item = self._items[idx]
+
+        return item
+
+    def __setitem__(self, idx, value):
+        self.invalidate()
+        self._items[idx] = value # XXX should promote native values to TAG_... ?
+
+    def insert(self, idx, value):
+        self.invalidate()
+        self._items.insert(idx, value)
+
+    def append(self, value):
+        self.insert(len(self._items), value)
 
 class TAG_Compound(TAG):
     id = 10
@@ -189,6 +229,7 @@ class TAG_Compound(TAG):
                 "}"
 
     def parse_payload(self, base, offset):
+        start = offset
         items = {}
         while True:
           item, name, offset = TAG.parse(base, offset, parent=self)
@@ -197,7 +238,7 @@ class TAG_Compound(TAG):
           items[name] = item
           
         self._items = items
-        return offset
+        return base[start:offset], offset
 
     def keys(self):
         return self._items.keys()
@@ -224,6 +265,7 @@ class TAG_Compound(TAG):
         return item
 
     def __setitem__(self, name, value):
+        self.invalidate()
         self._items[name] = value # XXX should promote native values to TAG_... ?
 
     def __getattr__(self, name):
