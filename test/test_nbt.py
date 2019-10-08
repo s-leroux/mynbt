@@ -286,3 +286,55 @@ class TestSetValue(unittest.TestCase):
         other.x = nbt.shortTest
         self.assertIn("x", other.keys())
         self.assertIs(nbt.shortTest, other.x)
+
+import io
+class TestWrite(unittest.TestCase):
+    def test_write_atom(self):
+        """ It should write back atomic values
+        """
+        data = bytes.fromhex(SOME_SHORT)
+        nbt, name, _ = TAG.parse(data, 0)
+
+        output = io.BytesIO()
+        nbt.write(output, name)
+
+        self.assertEqual(output.getbuffer(), data)
+
+    def test_write_compound(self):
+        """ It should write back compound values
+        """
+        data = bytes.fromhex(SOME_NESTED_COMPOUND)
+        nbt, name, _ = TAG.parse(data, 0)
+
+        output = io.BytesIO()
+        nbt.write(output, name)
+
+        self.assertEqual(output.getbuffer(), data)
+
+    def test_write_change(self):
+        """ It should write changes
+        """
+        data = bytes.fromhex(SOME_COMPOUND)
+        nbt, name, _ = TAG.parse(data, 0)
+
+        nbt.shortTest = 0x1234
+
+        output = io.BytesIO()
+        nbt.write(output, name)
+
+        self.assertIn(b'\x02\x00\tshortTest\x124', bytes(output.getbuffer()))
+
+    def test_write_copies(self):
+        """ It should write items copied from other nbt
+        """
+        data = bytes.fromhex(SOME_COMPOUND)
+        nbt, name, _ = TAG.parse(data, 0)
+
+        nbt.otherShort = nbt.shortTest
+
+        output = io.BytesIO()
+        nbt.write(output, name)
+
+        self.assertIn(b'\x02\x00\x09shortTest\x7F\xFF', bytes(output.getbuffer()))
+        self.assertIn(b'\x02\x00\x0AotherShort\x7F\xFF', bytes(output.getbuffer()))
+

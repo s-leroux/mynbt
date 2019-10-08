@@ -14,5 +14,5 @@ class TestRegion(unittest.TestCase):
         region = Region.open("test/data/region-r.0.0.mca")
         info = region.chunk_info(1,2)
         chunk = region.chunk(1,2)
-        print(chunk.Level.Entities.export())
-        print(chunk.Level.export(scope=['xPos', 'zPos']))
+        # print(chunk.Level.Entities.export())
+        # print(chunk.Level.export(scope=['xPos', 'zPos']))

@@ -1,12 +1,15 @@
 import gzip
-from struct import unpack, iter_unpack
+from struct import pack, unpack, iter_unpack
 from weakref import WeakSet
 import collections
+
+import io
 
 class TAG:
     datatypes = {}
 
     def __init__(self, value = None, parent = None):
+        self._payload = None
         self._id = self.__class__.ID
         self._value = value
         self._parents = WeakSet()
@@ -109,6 +112,23 @@ class TAG:
         assert data[offset:] == b""
         return result
 
+    def write(self, output, name=""):
+        """ Write the NBT object to a file-like output.
+            The output is assumed to be a binary stream
+        """
+        output.write(self.ID.to_bytes(1, 'big'))
+        if name is not None:
+            output.write(len(name).to_bytes(2, 'big'))
+            output.write(name.encode('utf8'))
+
+        if self._payload is not None:
+            output.write(self._payload)
+        else:
+            self.write_payload(output)
+
+    def write_payload(self, output):
+        pass
+
 class TAG_End(TAG):
     ID = 0
 
@@ -122,6 +142,9 @@ class Atom:
     def unpack(self):
         return unpack(self.FORMAT, bytes(self._payload))[0]
 
+    def write_payload(self, output):
+        output.write(pack(self.FORMAT, self.value))
+
 class Array:
     def __repr__(self):
         return super().__repr__() + " " + repr(self.value)
@@ -132,6 +155,11 @@ class Array:
 
     def unpack(self):
         return list(iter_unpack(self.FORMAT, bytes(self._payload[4:])))
+
+    def write_payload(self, output):
+        value = self.value
+        output.write(len(value).to_bytes(4, 'big'))
+        output.write(pack(self.FORMAT, *value))
 
 class TAG_Byte(Atom, TAG):
     ID = 1
@@ -242,6 +270,11 @@ class TAG_List(TAG, collections.abc.MutableSequence, collections.abc.Hashable):
             'value': value
           }
 
+    def write_payload(self, output):
+        output.write(len(self._items).to_bytes(4, 'big'))
+        for item in self._items:
+            item.write(output, name=None)
+
     def get_value(self):
         return self
 
@@ -314,6 +347,11 @@ class TAG_Compound(TAG, collections.abc.MutableMapping, collections.abc.Hashable
             'value': value
           }
 
+    def write_payload(self, output):
+        for name, item in self._items.items():
+            item.write(output, name=name)
+        output.write(b"\x00")
+
     def get_value(self):
         return self
 
@@ -333,7 +371,16 @@ class TAG_Compound(TAG, collections.abc.MutableMapping, collections.abc.Hashable
 
     def __setitem__(self, idx, value):
         self.invalidate()
-        self._items[idx] = value # XXX should promote native values to TAG_... ?
+
+        if not isinstance(value, TAG):
+            # Non-TAG objects must be promoted.
+            # if the new value replace an existing one, the value keep the same type
+            # otherwise a compatible type is inferred
+            old = self._items.get(idx)
+            cls = old.__class__ if old is not None else TAG_Int
+            value = old.__class__(value)
+
+        self._items[idx] = value
 
     def __delitem__(self, idx):
         self.invalidate()
