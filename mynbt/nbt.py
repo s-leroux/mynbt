@@ -377,7 +377,7 @@ class TAG_Compound(TAG, collections.abc.MutableMapping, collections.abc.Hashable
             # if the new value replace an existing one, the value keep the same type
             # otherwise a compatible type is inferred
             old = self._items.get(idx)
-            cls = old.__class__ if old is not None else TAG_Int
+            cls = old.__class__ if old is not None else TAG.typemapping[type(value)]
             value = old.__class__(value)
 
         self._items[idx] = value
@@ -425,6 +425,13 @@ TAG.datatypes = { t.ID: t for t in (
     TAG_Int_Array,
     TAG_Long_Array,
         )}
+
+TAG.typemapping = {
+    int:    TAG_Int,
+    float:  TAG_Double,
+    str:    TAG_String,
+    bool:   TAG_Byte,
+}
 
 class NBTNode:
     def __init__(self, bindata=None):
