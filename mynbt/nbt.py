@@ -116,6 +116,7 @@ class TAG:
         """ Write the NBT object to a file-like output.
             The output is assumed to be a binary stream
         """
+        # XXX rename me to write_into or write_to or dump_to
         output.write(self.ID.to_bytes(1, 'big'))
         if name is not None:
             output.write(len(name).to_bytes(2, 'big'))
@@ -125,6 +126,11 @@ class TAG:
             output.write(self._payload)
         else:
             self.write_payload(output)
+
+    def dump(self, name=""):
+        output = io.BytesIO()
+        self.write(output, name)
+        return output.getbuffer()
 
     def write_payload(self, output):
         pass
