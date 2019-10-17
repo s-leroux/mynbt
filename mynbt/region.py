@@ -8,6 +8,7 @@
 """
 
 from mmap import mmap, PROT_READ
+from time import time
 from struct import unpack
 import zlib
 import gzip
@@ -15,9 +16,26 @@ import io
 
 from mynbt.nbt import TAG
 
-PAGE=4096
+PAGE_SIZE=4096
 """ Page-size (in bytes) in the region file
 """
+
+GLIB=b"\x01"
+ZLIB=b"\x02"
+COMPRESSOR = {
+  GLIB: gzip.compress,
+  ZLIB: zlib.compress,
+}
+DECOMPRESSOR = {
+  GLIB: gzip.decompress,
+  ZLIB: zlib.decompress,
+}
+
+def assert_in_range(x, start, end, msg="value"):
+    if start <= x < end:
+      return
+
+    raise ValueError("{msg} must be in the [{start},{end}) range".format(msg=msg,start=start,end=end))
 
 def bytes_to_chunk_addr(base, offset):
     # XXX should use memoryview to deal with the header.
@@ -40,70 +58,59 @@ class ChunkContextManager:
         if exc_type is None:
             self._region.set_chunk(self._x, self._z, self._chunk) 
 
+EmptyPage = bytes(PAGE_SIZE)
+from collections import namedtuple
+ChunkInfo = namedtuple('ChunkInfo', ['addr', 'size', 'timestamp', 'x', 'z', 'data'])
+EmptyChunk = ChunkInfo(0,0,0,0,0,memoryview(EmptyPage[0:0]))
+
 class Region:
-    def __init__(self, data=bytes(2*PAGE)):
-      self._data = data
+    def __init__(self, data=bytes(2*PAGE_SIZE)):
       view = memoryview(data)
-      self._locations=view[0:PAGE].cast('i')
-      self._timestamps=view[PAGE:2*PAGE].cast('i')
-      self._header_cache = {}
-      self._eof = len(data)
+      locations=view[0:PAGE_SIZE].cast('i')
+      timestamps=view[PAGE_SIZE:2*PAGE_SIZE].cast('i')
+
+      self._chunks = [EmptyChunk]*1024
+
+      for i in range(1024):
+        location = int.from_bytes(locations[i:][:1], 'big')
+        if location != 0:
+            timestamp = int.from_bytes(timestamps[i:][:1], 'big')
+            addr, size = location>>8,location&0xFF # Addr and size in 4KiB pages
+            self._chunks[i] = ChunkInfo(addr, size, timestamp, *divmod(i,32), view[addr*PAGE_SIZE:][:size*PAGE_SIZE])
 
     def chunk_info(self, x, z):
-      key = (x,z)
-      result = self._header_cache.get(key, None)
-      if result is None:
-        idx = 4*((x & 31) + (z & 31) * 32)
-        addr = int.from_bytes(self._locations[idx:idx+1], 'big')
-        addr, size = addr>>8,addr&0xFF # Addr and size in 4KiB pages
-        timestamp = self._timestamps[idx]
-        buffer = memoryview(self._data)[PAGE*addr:][:PAGE*size] if addr and size else None
-        
-        result = (addr, size, timestamp, buffer)
-        # XXX should sanitize the result in case of addr or addr+size beyond the end of file
-        self._header_cache[key] = result
-
-      return result
+      idx = z*32+x
+      return self._chunks[idx]
 
     def parse_chunk(self, x, z):
-      _, _, _, mem = self.chunk_info(x,z)
+      *_, mem = self.chunk_info(x,z)
       if mem is None:
         return None
 
-      decompressor = {
-        1: gzip.decompress,
-        2: zlib.decompress,
-      }
-      compression = mem[4]
-      data = decompressor[compression](mem[5:])
+      compression = mem[4:5]
+      data = DECOMPRESSOR[compression](mem[5:])
       nbt, *_ = TAG.parse(data,0)
       return nbt
 
-    def set_chunk(self, x, z, chunk):
+    def set_chunk(self, x, z, chunk, *, compression=ZLIB):
+        assert_in_range(x, 0, 32, 'x')
+        assert_in_range(z, 0, 32, 'z')
+
         chunk_info = self.chunk_info(x,z)
         
         data = io.BytesIO()
-        data.write(
-          b'\x00\x00\x00\x00'     # chunk length placeholder
-          b'\x02'                 # compression format
-        )
         chunk.write(data)
         dump = data.getbuffer()
+        dump = COMPRESSOR[compression](dump)
 
-        logical_size = len(dump)-5
-        dump[:4] = logical_size.to_bytes(4, 'big')
+        logical_size = len(dump)
+        dump = logical_size.to_bytes(4, 'big') + compression + dump
 
-        physical_size = (logical_size+5+PAGE-1)//PAGE
-        if physical_size > chunk_info[1]:
-            # not enought room available; append the item at the end of the file
-            addr = (self._eof+PAGE-1)//PAGE # ensure we are at a page boundary. This should be the case unless the file was damaged
-            self._eof += physical_size*PAGE
-        else:
-            addr = chunk_info[0]
+        size = addr = -1
+        timestamp = int(time())
 
-        timestamp = chunk_info[3]
-
-        chunk_info = (addr, physical_size, timestamp, dump)
+        idx = z*32+x
+        self._chunks[idx] = ChunkInfo(addr, size, timestamp, x, z, dump)
 
     def chunk(self, x, z):
       """ Return a context manager to modify and update a chunk from the region
@@ -112,17 +119,34 @@ class Region:
 
     def write_to(self, output, *, filter=lambda x,y:True):
         """ Write the current region file to the given output
-            Output should support the 'write' and 'seek' operations
+            Output should support the 'write' operations
         """
-        # Copy headers
-        header1=memoryview(bytearray(self._locations))
-        header2=memoryview(bytearray(self._timestamps))
-        
-        # Overwrite header data with cached chunk infos
-        for (x,y), info in self._header_cache.item():
-            idx = 4*((x & 31) + (z & 31) * 32)
-            header1[4*idx:][:4] = (((info[0]//4096)<<8)|((info[1]//4096)&0xFF)).to_bytes(4,'big')
-            header2[4*idx:][:4] = int(time.time()).to_bytes(4, 'big')
+
+        # walk over the chunk list to write the chunk offset and size in the file
+        addr = 2
+        for chunk in self._chunks:
+            
+            size = (len(chunk.data)+4095)//4096
+            if size == 0:
+                word = b"\x00\x00\x00\x00"
+            else:
+                word = ((addr<<8) | (size&0xFF)).to_bytes(4, 'big')
+                addr += size
+
+            output.write(word)
+
+        # walk over the chunk list to write the timestamps
+        for chunk in self._chunks:
+            output.write(chunk.timestamp.to_bytes(4, 'big'))
+
+
+        # walk over the chunk list to write the data
+        for chunk in self._chunks:
+            output.write(chunk.data)
+            
+            pad = len(chunk.data)%4096
+            if pad > 0:
+                output.write(EmptyPage[-pad:])
 
     @staticmethod
     def open(path):
