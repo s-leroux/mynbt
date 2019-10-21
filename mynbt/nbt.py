@@ -93,6 +93,9 @@ class Node:
         if parent is not None:
             self.register_parent(parent)
 
+    #------------------------------------
+    # Managing ancestors chain
+    #------------------------------------
     def register_parent(self,parent):
         assert isinstance(parent, Node), "Parent must be  valid NBT node " + str(type(parent))
         self._parents.add(parent)
@@ -198,6 +201,10 @@ class Proxy(Node):
         This avoid spending time decoding uneeded data. It also
         speed-up writing back unmodified data
     """
+    def __init__(self, *, trait, payload=None, parent = None):
+        super().__init__(trait=trait, payload=payload, parent=parent)
+        self._value = None
+
     def __repr__(self):
         return repr("{base}[{trait},{payload}]".format(base=super().__repr__(), trait=self._trait, payload=self._payload))
 
@@ -224,7 +231,10 @@ class Proxy(Node):
     def value(self):
         """ Return a value object corresponding to the payload
         """
-        return self._trait.VALUE(self.unpack(), payload=self._payload, trait=self._trait)
+        if self._value is None:
+            self._value = self._trait.VALUE(self.unpack(), payload=self._payload, trait=self._trait)
+
+        return self._value
 
     def write_payload(self, output):
         output.write(self._payload)
