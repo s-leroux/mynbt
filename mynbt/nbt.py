@@ -13,7 +13,6 @@ class TAG:
         self._id = self.__class__.ID
         self._value = value
         self._parents = WeakSet()
-        self.register_parent(parent)
 
     def __repr__(self):
         attr=[]
@@ -22,9 +21,6 @@ class TAG:
 
         return "{tag}({attr})".format(tag=self.__class__.__name__, attr=", ".join(attr))
 
-    def register_parent(self,parent):
-        if parent is not None:
-          self._parents.add(parent)
 
     def invalidate(self):
         queue = [self]
@@ -128,21 +124,20 @@ class Node:
         a value node
     """
     def __init__(self, *, trait, payload=None, parent = None):
-        self._parents = WeakSet()
-        self.register_parents(parent)
         self._trait = trait
         self._payload = payload
+        self._parents = WeakSet()
+        if parent is not None:
+            self.register_parent(parent)
+
+    def register_parent(self,parent):
+        assert isinstance(parent, Node), "Parent must be  valid NBT node " + str(type(parent))
+        self._parents.add(parent)
 
     def register_parents(self,parents):
-        if parents is None:
-          return
-        if isinstance(parents, Node):
-          parents = (parents,)
-
-        # assume this is an iterable
         for parent in parents:
-          assert isinstance(parent, Node)
-          self._parents.add(parent)
+            self.register_parent(parent)
+        return self
 
     def invalidate(self):
         queue = [self]
@@ -266,7 +261,7 @@ class Proxy(Node):
     def value(self):
         """ Return a value object corresponding to the payload
         """
-        return self._trait.VALUE(self.unpack(), parent=self._parents, payload=self._payload, trait=self._trait)
+        return self._trait.VALUE(self.unpack(), payload=self._payload, trait=self._trait)
 
     def write_payload(self, output):
         output.write(self._payload)
@@ -284,8 +279,8 @@ class StringProxy(Proxy):
         return bytes(self._payload[2:]).decode("utf8") # XXX unneeded (?) copy
 
 class ListNode(Node, collections.abc.MutableSequence, collections.abc.Hashable):
-    def __init__(self, items, *, trait, payload, parent):
-        self._items = items
+    def __init__(self, *, trait, payload, parent):
+        self._items = []
         super().__init__(trait=trait, payload=payload, parent=parent)
 
     def __repr__(self):
@@ -333,16 +328,20 @@ class ListNode(Node, collections.abc.MutableSequence, collections.abc.Hashable):
         value = node.value()
 
         if value is not node:
+            value.register_parent(self)
             self._items[idx] = value
 
         return value
 
     def __setitem__(self, idx, value):
         self.invalidate()
+        value.register_parent(self)
         self._items[idx] = value # XXX should promote native values to TAG_... ?
 
     def __delitem__(self, idx):
         self.invalidate()
+        # using a WeakKeyDictionary we may emulate multibag and remove self
+        # from the removed item parent list
         del self._items[idx]
 
     def __len__(self):
@@ -353,9 +352,9 @@ class ListNode(Node, collections.abc.MutableSequence, collections.abc.Hashable):
         self._items.insert(idx, value)
 
 class CompoundNode(Node, collections.abc.MutableMapping, collections.abc.Hashable):
-    def __init__(self, items, *, trait, payload, parent):
-        self._items = items
+    def __init__(self, *, trait, payload, parent):
         super().__init__(trait=trait, payload=payload, parent=parent)
+        self._items = {}
 
     def __repr__(self):
         return super().__repr__() + " {" +\
@@ -406,6 +405,7 @@ class CompoundNode(Node, collections.abc.MutableMapping, collections.abc.Hashabl
         value = node.value()
 
         if value is not node:
+            value.register_parent(self)
             self._items[idx] = value
 
         return value
@@ -482,6 +482,8 @@ class StringReader(Reader):
 class ListReader(Reader):
     def make_from_payload(self, base, offset, *, parent):
         start = offset
+        container = ListNode(trait=self._trait, payload=None, parent=parent)
+
         trait, offset = TAG.parse_tag(base, offset)
         count, = unpack('>i',bytes(base[offset:offset+4]))
         offset += 4
@@ -495,23 +497,26 @@ class ListReader(Reader):
             count = 0
         items = []
         while count > 0:
-          item, offset = trait.make_from_payload(base, offset, parent=parent)
-          items.append(item)
+          item, offset = trait.make_from_payload(base, offset, parent=container)
+          container.append(item)
           count -= 1
-       
-        return ListNode(items, trait=self._trait, payload=base[start:offset], parent=parent), offset
+        
+        container._payload = base[start:offset]
+        return container, offset
 
 class CompoundReader(Reader):
     def make_from_payload(self, base, offset, *, parent):
+        container = CompoundNode(trait=self._trait, payload=None, parent=parent)
         start = offset
         items = {}
         while True:
-          item, name, offset = TAG.parse(base, offset, parent=parent)
+          item, name, offset = TAG.parse(base, offset, parent=container)
           if type(item) is End:
             break
-          items[name] = item
+          container[name] = item
           
-        return CompoundNode(items, trait=self._trait, payload=base[start:offset], parent=parent), offset
+        container._payload = base[start:offset]
+        return container, offset
 
 # ==================================================================== 
 # Traits
