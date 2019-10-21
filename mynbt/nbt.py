@@ -71,21 +71,22 @@ class TAG:
     @staticmethod
     def parse_tag(base, offset):
         ID,offset = TAG.parse_id(base, offset)
-        tag = TAG.datatypes[ID]
-        assert tag.ID == ID
+        trait = TraitMetaclass.TRAITS[ID]
+        assert trait.ID == ID
 
-        return tag, offset
+        return trait, offset
 
     @staticmethod
     def parse(base, offset, parent = None):
         base = memoryview(base)
         start = offset
         name = None
-        tag, offset = TAG.parse_tag(base,offset)
-        result = tag(parent=parent)
-        if tag is not TAG_End:
-          name, offset = result.parse_name(base, offset)
-          result._payload, offset = result.parse_payload(base, offset)
+        trait, offset = TAG.parse_tag(base,offset)
+        if trait is EndTrait:
+          result = End(parent=parent)
+        else:
+          name, offset = TAG.parse_name(base, offset)
+          result, offset = trait.make_from_payload(base, offset, parent=parent)
 
         return result, name, offset
 
@@ -112,12 +113,54 @@ class TAG:
         assert data[offset:] == b""
         return result
 
+    def write_payload(self, output):
+        pass
+
+# ==================================================================== 
+# Value types
+# ==================================================================== 
+class Node:
+    """ Base class for NBT node elements.
+        When parsing NBT data, node are mostly proxy containing
+        the raw undecoded bytes for the node.
+        
+        When the value of a proxy node is accessed, it instanciates
+        a value node
+    """
+    def __init__(self, *, trait, payload=None, parent = None):
+        self._parents = WeakSet()
+        self.register_parents(parent)
+        self._trait = trait
+        self._payload = payload
+
+    def register_parents(self,parents):
+        if parents is None:
+          return
+        if isinstance(parents, Node):
+          parents = (parents,)
+
+        # assume this is an iterable
+        for parent in parents:
+          assert isinstance(parent, Node)
+          self._parents.add(parent)
+
+    def invalidate(self):
+        queue = [self]
+        while queue:
+          item = queue.pop()
+          if item._payload:
+            item._payload = None
+            queue.extend(item._parents)
+
+    #------------------------------------
+    # Exporting NBT values
+    #------------------------------------
     def write(self, output, name=""):
         """ Write the NBT object to a file-like output.
             The output is assumed to be a binary stream
         """
         # XXX rename me to write_into or write_to or dump_to
-        output.write(self.ID.to_bytes(1, 'big'))
+        output.write(self._trait.ID.to_bytes(1, 'big'))
         if name is not None:
             output.write(len(name).to_bytes(2, 'big'))
             output.write(name.encode('utf8'))
@@ -133,136 +176,125 @@ class TAG:
         return output.getbuffer()
 
     def write_payload(self, output):
-        pass
+        if self._payload is None:
+            raise ValueError
 
-class TAG_End(TAG):
-    ID = 0
+        output.write(self._payload)
 
-class Atom:
+    def export(self, *, compact=True):
+        raise NotImplementedError
+
+    def value(self):
+        return self
+
+# ==================================================================== 
+# Value types
+# ==================================================================== 
+class End(Node):
+    def __init__(self, *, parent):
+      super().__init__(trait=EndTrait, parent=parent)
+
+class Value(Node):
+    def write_payload(self, output):
+        if self._payload is None:
+            self._payload = self.pack()
+
+        super().write_payload(output)
+
+    def pack(self):
+        """ Pack the value to a proper byte payload
+            
+            This implementation assume `self` is
+            a subclass of a native Python type
+        """
+        return pack(self._trait.FORMAT, self) 
+
+class Integer(int, Value):
+    def __new__(cls, value, **kwargs):
+        return int.__new__(cls, value)
+
+    def __init__(self, value, *, trait = None, payload = None, parent = None):
+        Node.__init__(self, trait = trait or IntTrait, payload = payload, parent = parent)
+
+class Float(float, Value):
+    def __new__(cls, value, **kwargs):
+        return float.__new__(cls, value)
+
+    def __init__(self, value, *, trait = None, payload = None, parent = None):
+        Node.__init__(self, trait = trait or DoubleTrait, payload = payload, parent = parent)
+
+class String(str, Value):
+    def __new__(cls, value, **kwargs):
+        return str.__new__(cls, value)
+
+    def __init__(self, value, *, trait = None, payload = None, parent = None):
+        Node.__init__(self, trait = trait or StringTrait, payload = payload, parent = parent)
+
+# ==================================================================== 
+# Proxy
+# ==================================================================== 
+class Proxy(Node):
+    """ A proxy stores binary NBT data as read from a binary stream
+        (i.e. without decoding them)
+
+        This avoid spending time decoding uneeded data. It also
+        speed-up writing back unmodified data
+    """
     def __repr__(self):
-        return super().__repr__() + " " + str(self.value)
+        return repr("{base}[{trait},{payload}]".format(base=super().__repr__(), trait=self._trait, payload=self._payload))
 
-    def parse_payload(self, base, offset):
-        return base[offset:offset+self.SIZE], offset+self.SIZE
+    #------------------------------------
+    # Rich comparisons
+    #------------------------------------
+    def __eq__(self, other):
+        if self is other:
+            return True
 
+        if isinstance(other, Proxy):
+            other = other.value()
+
+        return self.value() == other
+
+    #------------------------------------
+    # Proxy interface
+    #------------------------------------
     def unpack(self):
-        return unpack(self.FORMAT, bytes(self._payload))[0]
+        """ Decode the proxy payload and return proper object
+        """
+        raise NotImplementedError
+
+    def value(self):
+        """ Return a value object corresponding to the payload
+        """
+        return self._trait.VALUE(self.unpack(), parent=self._parents, payload=self._payload, trait=self._trait)
 
     def write_payload(self, output):
-        output.write(pack(self.FORMAT, self.value))
+        output.write(self._payload)
 
-class Array:
-    def __repr__(self):
-        return super().__repr__() + " " + repr(self.value)
-
-    def parse_payload(self, base, offset):
-        l, = unpack('>i',bytes(base[offset:offset+4]))
-        return base[offset:offset+4+l*self.SIZE], offset+4+l*self.SIZE
-
+class AtomProxy(Proxy):
     def unpack(self):
-        return list(iter_unpack(self.FORMAT, bytes(self._payload[4:])))
+        return unpack(self._trait.FORMAT, self._payload)[0]
 
-    def write_payload(self, output):
-        value = self.value
-        output.write(len(value).to_bytes(4, 'big'))
-        output.write(pack(self.FORMAT, *value))
-
-class TAG_Byte(Atom, TAG):
-    ID = 1
-    SIZE = 1
-    FORMAT = ">b"
-
-    #def parse_payload(self, base, offset):
-    #    return base[offset:offset+1], offset+1
-    #
-    #def unpack(self):
-    #    return unpack(">b", bytes(self._payload))
-
-class TAG_Short(Atom, TAG):
-    ID = 2
-    SIZE = 2
-    FORMAT = ">h"
-
-class TAG_Int(Atom, TAG):
-    ID = 3
-    SIZE = 4
-    FORMAT = ">i"
-
-class TAG_Long(Atom, TAG):
-    ID = 4
-    SIZE = 8
-    FORMAT = ">q"
-
-class TAG_Float(Atom, TAG):
-    ID = 5
-    SIZE = 4
-    FORMAT = ">f"
-
-class TAG_Double(Atom, TAG):
-    ID = 6
-    SIZE = 8
-    FORMAT = ">d"
-
-class TAG_Byte_Array(Array, TAG):
-    ID = 7
-    SIZE = 1
-    FORMAT = ">b"
-
-class TAG_Int_Array(Array, TAG):
-    ID = 11
-    SIZE = 4
-    FORMAT = ">i"
-
-class TAG_Long_Array(Array, TAG):
-    ID = 12
-    SIZE = 8
-    FORMAT = ">q"
-
-class TAG_String(TAG):
-    ID = 8
-
-    def parse_payload(self, base, offset):
-        l, = unpack('>h',bytes(base[offset:offset+2]))
-        return base[offset:offset+2+l], offset+2+l
-
+class ArrayProxy(Proxy):
     def unpack(self):
-        return bytes(self._payload[2:]).decode("utf8")
+        return iter_unpack(self._trait.FORMAT, self._payload[4:])
 
-class TAG_List(TAG, collections.abc.MutableSequence, collections.abc.Hashable):
-    ID = 9
+class StringProxy(Proxy):
+    def unpack(self):
+        return bytes(self._payload[2:]).decode("utf8") # XXX unneeded (?) copy
 
-    def __init__(self, *args, **kwargs):
-        self._items = []
-        super().__init__(*args, **kwargs)
+class ListNode(Node, collections.abc.MutableSequence, collections.abc.Hashable):
+    def __init__(self, items, *, trait, payload, parent):
+        self._items = items
+        super().__init__(trait=trait, payload=payload, parent=parent)
 
     def __repr__(self):
         return super().__repr__() + " {" +\
                 ", ".join(repr(item) for item in self._items) +\
                 "}"
-
-    def parse_payload(self, base, offset):
-        start = offset
-        tag, offset = TAG.parse_tag(base, offset)
-        count, = unpack('>i',bytes(base[offset:offset+4]))
-        offset += 4
-        # XXX Check implications of that statement:
-        # """ If the length of the list is 0 or negative, 
-        #     the type may be 0 (TAG_End) but otherwise it must 
-        #     be any other type. """
-        #  -- https://wiki.vg/NBT#Specification
-
-        if count < 0:
-            count = 0
-        items = []
-        while count > 0:
-          item = tag(parent=self)
-          item._payload, offset = item.parse_payload(base, offset)
-          items.append(item)
-          count -= 1
-       
-        self._items = items
-        return base[start:offset], offset
-
+    #------------------------------------
+    # Node interface
+    #------------------------------------
     def export(self, *, compact=True):
         """ Export a NBT data structure as Python native objects.
         """
@@ -281,7 +313,10 @@ class TAG_List(TAG, collections.abc.MutableSequence, collections.abc.Hashable):
         for item in self._items:
             item.write(output, name=None)
 
-    def get_value(self):
+    #------------------------------------
+    # Proxy interface
+    #------------------------------------
+    def value(self):
         return self
 
     #------------------------------------
@@ -294,9 +329,13 @@ class TAG_List(TAG, collections.abc.MutableSequence, collections.abc.Hashable):
     # Mutable sequence interface
     #------------------------------------
     def __getitem__(self, idx):
-        item = self._items[idx]
+        node = self._items[idx]
+        value = node.value()
 
-        return item
+        if value is not node:
+            self._items[idx] = value
+
+        return value
 
     def __setitem__(self, idx, value):
         self.invalidate()
@@ -313,33 +352,19 @@ class TAG_List(TAG, collections.abc.MutableSequence, collections.abc.Hashable):
         self.invalidate()
         self._items.insert(idx, value)
 
-class TAG_Compound(TAG, collections.abc.MutableMapping, collections.abc.Hashable):
-    ID = 10
-
-    def __init__(self, *args, **kwargs):
-        self._items = {}
-        super().__init__(*args, **kwargs)
+class CompoundNode(Node, collections.abc.MutableMapping, collections.abc.Hashable):
+    def __init__(self, items, *, trait, payload, parent):
+        self._items = items
+        super().__init__(trait=trait, payload=payload, parent=parent)
 
     def __repr__(self):
         return super().__repr__() + " {" +\
                 ", ".join(name + ": " + repr(item) for name, item in self._items.items()) +\
                 "}"
 
-    def parse_payload(self, base, offset):
-        start = offset
-        items = {}
-        while True:
-          item, name, offset = TAG.parse(base, offset, parent=self)
-          if type(item) is TAG_End:
-            break
-          items[name] = item
-          
-        self._items = items
-        return base[start:offset], offset
-
-    def keys(self):
-        return self._items.keys()
-
+    #------------------------------------
+    # Node interface
+    #------------------------------------
     def export(self, *, scope=None, compact=True):
         """ Export a NBT data structure as Python native objects.
         """
@@ -358,7 +383,10 @@ class TAG_Compound(TAG, collections.abc.MutableMapping, collections.abc.Hashable
             item.write(output, name=name)
         output.write(b"\x00")
 
-    def get_value(self):
+    #------------------------------------
+    # Proxy interface
+    #------------------------------------
+    def value(self):
         return self
 
     #------------------------------------
@@ -370,21 +398,27 @@ class TAG_Compound(TAG, collections.abc.MutableMapping, collections.abc.Hashable
     #------------------------------------
     # Mutable mapping interface
     #------------------------------------
-    def __getitem__(self, idx):
-        item = self._items[idx]
+    def keys(self):
+        return self._items.keys()
 
-        return item
+    def __getitem__(self, idx):
+        node = self._items[idx]
+        value = node.value()
+
+        if value is not node:
+            self._items[idx] = value
+
+        return value
 
     def __setitem__(self, idx, value):
         self.invalidate()
-
-        if not isinstance(value, TAG):
-            # Non-TAG objects must be promoted.
+        if not isinstance(value, Node):
+            # Non-Node objects must be promoted.
             # if the new value replace an existing one, the value keep the same type
             # otherwise a compatible type is inferred
             old = self._items.get(idx)
-            cls = old.__class__ if old is not None else TAG.typemapping[type(value)]
-            value = old.__class__(value)
+            trait = old._trait if old is not None else TYPE_TO_TRAIT[type(value)]
+            value = trait.VALUE(value, trait=trait)
 
         self._items[idx] = value
 
@@ -416,27 +450,177 @@ class TAG_Compound(TAG, collections.abc.MutableMapping, collections.abc.Hashable
         else:
           del self[name]
 
-TAG.datatypes = { t.ID: t for t in (
-    TAG_End,
-    TAG_Byte,
-    TAG_Short,
-    TAG_Int,
-    TAG_Long,
-    TAG_Float,
-    TAG_Double,
-    TAG_Byte_Array,
-    TAG_String,
-    TAG_List,
-    TAG_Compound,
-    TAG_Int_Array,
-    TAG_Long_Array,
-        )}
+# ==================================================================== 
+# Reader
+# ====================================================================
+class Reader:
+    def __init__(self, trait):
+        self._trait = trait
 
-TAG.typemapping = {
-    int:    TAG_Int,
-    float:  TAG_Double,
-    str:    TAG_String,
-    bool:   TAG_Byte,
+    def make_from_payload(self, base, offset, *, parent):
+        """ Create a node using the binary payload starting as base[offset]
+        """
+        raise NotImplementedError
+
+class AtomReader(Reader):
+    def make_from_payload(self, base, offset, *, parent):
+        payload = base[offset:offset+self._trait.SIZE] 
+        return AtomProxy(trait=self._trait, payload=payload, parent=parent),offset+self._trait.SIZE
+
+class ArrayReader(Reader):
+    def make_from_payload(self, base, offset, *, parent):
+        l, = unpack('>i',bytes(base[offset:offset+4]))
+        payload = base[offset:offset+4+l*self._trait.SIZE]
+        return ArrayProxy(trait=self._trait, payload=payload, parent=parent),offset+4+l*self._trait.SIZE
+
+class StringReader(Reader):
+    def make_from_payload(self, base, offset, *, parent):
+        l, = unpack('>h',bytes(base[offset:offset+2]))
+        payload = base[offset+2:offset+2+l]
+        return StringProxy(trait=self._trait, payload=payload, parent=parent),offset+2+l
+
+class ListReader(Reader):
+    def make_from_payload(self, base, offset, *, parent):
+        start = offset
+        trait, offset = TAG.parse_tag(base, offset)
+        count, = unpack('>i',bytes(base[offset:offset+4]))
+        offset += 4
+        # XXX Check implications of that statement:
+        # """ If the length of the list is 0 or negative, 
+        #     the type may be 0 (End) but otherwise it must 
+        #     be any other type. """
+        #  -- https://wiki.vg/NBT#Specification
+
+        if count < 0:
+            count = 0
+        items = []
+        while count > 0:
+          item, offset = trait.make_from_payload(base, offset, parent=parent)
+          items.append(item)
+          count -= 1
+       
+        return ListNode(items, trait=self._trait, payload=base[start:offset], parent=parent), offset
+
+class CompoundReader(Reader):
+    def make_from_payload(self, base, offset, *, parent):
+        start = offset
+        items = {}
+        while True:
+          item, name, offset = TAG.parse(base, offset, parent=parent)
+          if type(item) is End:
+            break
+          items[name] = item
+          
+        return CompoundNode(items, trait=self._trait, payload=base[start:offset], parent=parent), offset
+
+# ==================================================================== 
+# Traits
+# ==================================================================== 
+class TraitMetaclass(type):
+    TRAITS = {}
+
+    """ A little bit of black magic to tune traits attributes
+    """
+    def __new__(meta, cls, bases, dct):
+        cls = super().__new__(meta, cls, bases, dct)
+
+        # tune READER
+        READER = getattr(cls, 'READER', None)
+        if READER is not None:
+          cls.make_from_payload = READER(cls).make_from_payload
+
+        # collect traits IDs
+        ID = dct.get('ID')
+        if ID is not None:
+          meta.TRAITS[ID] = cls
+
+        return cls
+
+class Trait(metaclass=TraitMetaclass):
+    """ Define various properties for individual types
+    """
+    pass
+    
+class AtomTrait(Trait):
+    READER = AtomReader
+
+class ArrayTrait(Trait):
+    READER = ArrayReader
+
+class EndTrait(Trait):
+    ID = 0
+    # READER = EndReader
+
+class ByteTrait(AtomTrait):
+    ID = 1
+    SIZE = 1
+    FORMAT = ">b"
+    VALUE = Integer
+
+class ShortTrait(AtomTrait):
+    ID = 2
+    SIZE = 2
+    FORMAT = ">h"
+    VALUE = Integer
+
+class IntTrait(AtomTrait):
+    ID = 3
+    SIZE = 4
+    FORMAT = ">i"
+    VALUE = Integer
+
+class LongTrait(AtomTrait):
+    ID = 4
+    SIZE = 8
+    FORMAT = ">q"
+    VALUE = Integer
+
+class FloatTrait(AtomTrait):
+    ID = 5
+    SIZE = 4
+    FORMAT = ">f"
+    VALUE = Float
+
+class DoubleTrait(AtomTrait):
+    ID = 6
+    SIZE = 8
+    FORMAT = ">d"
+    VALUE = Float
+
+class Byte_ArrayTrait(ArrayTrait):
+    ID = 7
+    SIZE = 1
+    FORMAT = ">b"
+
+class Int_ArrayTrait(ArrayTrait):
+    ID = 11
+    SIZE = 4
+    FORMAT = ">i"
+
+class Long_ArrayTrait(ArrayTrait):
+    ID = 12
+    SIZE = 8
+    FORMAT = ">q"
+    READER = ArrayReader
+
+class StringTrait(Trait):
+    ID = 8
+    VALUE = String
+    READER = StringReader
+
+class ListTrait(Trait):
+    ID = 9
+    READER = ListReader
+
+class CompoundTrait(Trait):
+    ID = 10
+    READER = CompoundReader
+
+TYPE_TO_TRAIT = {
+    int:    IntTrait,
+    float:  DoubleTrait,
+    str:    StringTrait,
+    bool:   ByteTrait,
 }
 
 class NBTNode:
