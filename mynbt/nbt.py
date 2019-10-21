@@ -6,30 +6,6 @@ import collections
 import io
 
 class TAG:
-    datatypes = {}
-
-    def __init__(self, value = None, parent = None):
-        self._payload = None
-        self._id = self.__class__.ID
-        self._value = value
-        self._parents = WeakSet()
-
-    def __repr__(self):
-        attr=[]
-        if self._payload is not None:
-          attr.append("cached")
-
-        return "{tag}({attr})".format(tag=self.__class__.__name__, attr=", ".join(attr))
-
-
-    def invalidate(self):
-        queue = [self]
-        while queue:
-          item = queue.pop()
-          if item._payload:
-            item._payload = None
-            queue.extend(item._parents)
-
     def export(self, *, compact=True):
         """ Export a NBT data structure as Python native objects.
         """
@@ -42,16 +18,6 @@ class TAG:
             'type': self.__class__.__name__,
             'value': value,
           }
-
-    @property
-    def value(self):
-        return self.get_value()
-
-    def get_value(self):
-        if self._value is None:
-          self._value = self.unpack()
-
-        return self._value
 
     @staticmethod
     def parse_id(base, offset):
@@ -108,9 +74,6 @@ class TAG:
 
         assert data[offset:] == b""
         return result
-
-    def write_payload(self, output):
-        pass
 
 # ==================================================================== 
 # Value types
@@ -627,21 +590,4 @@ TYPE_TO_TRAIT = {
     str:    StringTrait,
     bool:   ByteTrait,
 }
-
-class NBTNode:
-    def __init__(self, bindata=None):
-        self.bindata = bindata
-
-    def __repr__(self):
-        return "NBTNode({bindata})".format(bindata=rawbytes(bindata)[:30])
-
-class NBTFile(NBTNode):
-    def __init__(self, path):
-        self.path = path
-        with gzip.open(path,"rb") as f:
-            super().__init__(f.read())
-
-class NBT:
-    def __init__(self, rawbytes):
-        self.rawbytes = rawbytes
 
