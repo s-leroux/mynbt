@@ -29,7 +29,7 @@ class SmartVisitor(Visitor):
         in accordance with the Go4 Design Pattern book.
 
         default implementations delegate to the vistor for
-        the more generic node up until `visitNode`
+        a more generic function up until `visitNode`
     """
     class Action:
         def __init__(self, visitor, path, node):
@@ -41,14 +41,34 @@ class SmartVisitor(Visitor):
             pass
         def visitAtom(self):
             return self.visitNode()
-        def visitInteger():
+        def visitNumber(self):
             return self.visitAtom()
+        def visitIntegral(self):
+            return self.visitNumber()
+        def visitByte(self):
+            return self.visitIntegral()
+        def visitShort(self):
+            return self.visitIntegral()
+        def visitInt(self):
+            return self.visitIntegral()
+        def visitLong(self):
+            return self.visitIntegral()
+        def visitFloatingPoint(self):
+            return self.visitNumber()
         def visitFloat(self):
-            return self.visitAtom()
+            return self.visitFloatingPoint()
+        def visitDouble(self):
+            return self.visitFloatingPoint()
         def visitString(self):
             return self.visitAtom()
         def visitArray(self):
             return self.visitNode()
+        def visitByteArray(self):
+            return self.visitArray()
+        def visitShortArray(self):
+            return self.visitArray()
+        def visitLongArray(self):
+            return self.visitArray()
         def visitList(self):
             return self.visitNode()
         def visitCompound(self):
@@ -61,13 +81,18 @@ class SmartVisitor(Visitor):
         pass
 
     def enter(self, path, node):
-        return node.accept(self.Enter(self, path, node))
+        return node._trait.accept(self.Enter(self, path, node))
 
     def leave(self, path, node):
-        return node.accept(self.Leave(self, path, node))
+        return node._trait.accept(self.Leave(self, path, node))
 
 class DSmartVisitor(SmartVisitor):
     class Enter(SmartVisitor.Enter):
+        def __getattribute__(self, attr):
+            if (attr.startswith('visit')):
+                print(attr)
+
+            return super().__getattribute__(attr)
         def visitNode(self):
             print('visitNode at '+self._path, type(self._node))
         def visitAtom(self):
@@ -83,3 +108,20 @@ class DSmartVisitor(SmartVisitor):
         def visitCompound(self):
             print('visitCompound at '+self._path, type(self._node))
 
+class Exporter(SmartVisitor):
+    def __init__(self):
+        self._stack = [{}]
+
+    class Enter(SmartVisitor.Enter):
+        def visitAtom(self):
+            self._visitor._stack[-1][self._path] = self._node.value()
+        def visitCompound(self):
+            self._visitor._stack.append({})
+
+    class Leave(SmartVisitor.Leave):
+        def visitCompound(self):
+            node = self._visitor._stack.pop()
+            self._visitor._stack[-1][self._path] = node
+
+            if len(self._visitor._stack) == 1:
+              return self._visitor._stack.pop()['']

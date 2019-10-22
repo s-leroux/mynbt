@@ -164,11 +164,6 @@ class Node:
 
         return self.visit(V(), rootname=rootname,filter=filter)
     
-    def accept(self, visitor):
-        """ Call the most specialized visitor method for this node
-        """
-        return visitor.visitNode()
-
     #------------------------------------
     # Exporting NBT values
     #------------------------------------
@@ -233,9 +228,6 @@ class Integer(int, Value):
     def __init__(self, value, *, trait = None, payload = None, parent = None):
         Node.__init__(self, trait = trait or IntTrait, payload = payload, parent = parent)
     
-    def accept(self, visitor):
-        return visitor.visitInteger()
-
 class Float(float, Value):
     def __new__(cls, value, **kwargs):
         return float.__new__(cls, value)
@@ -243,9 +235,6 @@ class Float(float, Value):
     def __init__(self, value, *, trait = None, payload = None, parent = None):
         Node.__init__(self, trait = trait or DoubleTrait, payload = payload, parent = parent)
     
-    def accept(self, visitor):
-        return visitor.visitFloat()
-
 class String(str, Value):
     def __new__(cls, value, **kwargs):
         return str.__new__(cls, value)
@@ -253,9 +242,6 @@ class String(str, Value):
     def __init__(self, value, *, trait = None, payload = None, parent = None):
         Node.__init__(self, trait = trait or StringTrait, payload = payload, parent = parent)
     
-    def accept(self, visitor):
-        return visitor.visitString()
-
 # ==================================================================== 
 # Proxy
 # ==================================================================== 
@@ -588,82 +574,101 @@ class TraitMetaclass(type):
 class Trait(metaclass=TraitMetaclass):
     """ Define various properties for individual types
     """
-    pass
+    @classmethod
+    def accept(cls, visitor):
+        """ Call the most specialized visitor method for this node
+        """
+        return visitor.__getattribute__(cls.VISIT)();
     
 class AtomTrait(Trait):
     READER = AtomReader
+    VISIT = 'visitAtom'
 
 class ArrayTrait(Trait):
     READER = ArrayReader
+    VISIT = 'visitArray'
 
 class EndTrait(Trait):
     ID = 0
     # READER = EndReader
+    VISIT = 'visitEnd'
 
 class ByteTrait(AtomTrait):
     ID = 1
     SIZE = 1
     FORMAT = ">b"
     VALUE = Integer
+    VISIT = 'visitByte'
 
 class ShortTrait(AtomTrait):
     ID = 2
     SIZE = 2
     FORMAT = ">h"
     VALUE = Integer
+    VISIT = 'visitShort'
 
 class IntTrait(AtomTrait):
     ID = 3
     SIZE = 4
     FORMAT = ">i"
     VALUE = Integer
+    VISIT = 'visitInt'
 
 class LongTrait(AtomTrait):
     ID = 4
     SIZE = 8
     FORMAT = ">q"
     VALUE = Integer
+    VISIT = 'visitLong'
 
 class FloatTrait(AtomTrait):
     ID = 5
     SIZE = 4
     FORMAT = ">f"
     VALUE = Float
+    VISIT = 'visitFloat'
 
 class DoubleTrait(AtomTrait):
     ID = 6
     SIZE = 8
     FORMAT = ">d"
     VALUE = Float
+    VISIT = 'visitDouble'
 
 class Byte_ArrayTrait(ArrayTrait):
     ID = 7
     SIZE = 1
     FORMAT = ">b"
+    VISIT = 'visitByteArray'
 
 class Int_ArrayTrait(ArrayTrait):
     ID = 11
     SIZE = 4
     FORMAT = ">i"
+    VISIT = 'visitIntArray'
 
 class Long_ArrayTrait(ArrayTrait):
     ID = 12
     SIZE = 8
     FORMAT = ">q"
     READER = ArrayReader
+    VISIT = 'visitLongArray'
 
 class StringTrait(Trait):
     ID = 8
     VALUE = String
     READER = StringReader
+    VISIT = 'visitString'
 
 class ListTrait(Trait):
     ID = 9
     READER = ListReader
+    VISIT = 'visitList'
 
 class CompoundTrait(Trait):
     ID = 10
     READER = CompoundReader
+    VISIT = 'visitCompound'
 
 TYPE_TO_TRAIT = {
     int:    IntTrait,

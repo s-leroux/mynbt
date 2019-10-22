@@ -9,4 +9,4 @@ class TestSmartVisitor(unittest.TestCase):
         """ Smart visitor should dispatch to the most specialized method
         """
         tree, *_ = nbt.TAG.parse(bytes.fromhex(SOME_NESTED_COMPOUND))
-        print(list(tree.visit(DSmartVisitor())))
+        print(list(tree.visit(Exporter())))
