@@ -114,6 +114,73 @@ class Node:
             queue.extend(item._parents)
 
     #------------------------------------
+    # NBT tree traversal
+    #------------------------------------
+    def children(self):
+        """ Yield a (name, node) tupple for each child of
+            the node.
+
+            Subclasses should ensure children are returned in a deterministic order
+        """
+        yield from ()
+
+    class Visitor:
+        def enter(self, path, node):
+            pass
+
+        def leave(self, path, node):
+            pass
+
+    class TraceVisitor:
+        def enter(self, path, node):
+            yield ("enter", path)
+
+        def leave(self, path, node):
+            yield ("leave", path)
+
+
+    def visit(self, visitor=Visitor(), *, rootname="", filter=lambda path, node: True):
+        """ Iterate over the NBT tree in depth-first order, calling
+            the visitor's methods when entering and leaving the node
+
+            The filter parameter controls if the subtree at path
+            should be explored
+        """
+        def enter(path, node):
+            yield from visitor.enter(path, node) or ()
+            # for v in visitor.enter(path, node) or ()
+            #    yield v
+
+            stack.append((path, node, leave))
+            if filter(path, node):
+                for childname, childnode in reversed(list(node.children())):
+                    stack.append((path + "." + str(childname), childnode, enter))
+
+        def leave(path, node):
+            yield from visitor.leave(path, node) or ()
+            # for v in visitor.leave(path, node) or ()
+            #    yield v
+
+        stack = [(rootname, self, enter)]
+        while stack:
+            path, node, action = stack.pop()
+            yield from action(path, node)
+
+    def walk(self, *, rootname="", filter=lambda path, node: True):
+        """ Iterate over the NBT tree yielding (path, node) tupple
+            for each item.
+
+            The filter parameter controls if the subtree at path
+            should be explored
+        """
+        class V(Node.Visitor):
+            def enter(self, path, node):
+                yield (path, node)
+
+        yield from self.visit(V(), rootname=rootname,filter=filter)
+        
+
+    #------------------------------------
     # Exporting NBT values
     #------------------------------------
     def write(self, output, name=""):
@@ -263,6 +330,9 @@ class ListNode(Node, collections.abc.MutableSequence, collections.abc.Hashable):
     #------------------------------------
     # Node interface
     #------------------------------------
+    def children(self):
+        return enumerate(self._items)
+
     def export(self, *, compact=True):
         """ Export a NBT data structure as Python native objects.
         """
@@ -337,6 +407,9 @@ class CompoundNode(Node, collections.abc.MutableMapping, collections.abc.Hashabl
     #------------------------------------
     # Node interface
     #------------------------------------
+    def children(self):
+        return sorted(self._items.items())
+
     def export(self, *, scope=None, compact=True):
         """ Export a NBT data structure as Python native objects.
         """

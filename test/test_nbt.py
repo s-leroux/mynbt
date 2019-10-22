@@ -327,6 +327,18 @@ class TestExport(unittest.TestCase):
           x = t.export(compact=False)
           self.assertEqual(x, case['extended'])
 
+    def test_walk_compound(self):
+        t, name, _ = TAG.parse(bytes.fromhex(SOME_NESTED_COMPOUND), 0)
+        self.assertEqual(set(name for name, *_ in t.walk()), set(('', '.Comp', '.Comp.shortTest', '.Comp.byteTest', '.shortTest')))
+
+    # walk is now implemented with a Visitor
+    # def test_visit_compound(self):
+    #     t, name, _ = TAG.parse(bytes.fromhex(SOME_NESTED_COMPOUND), 0)
+    #     self.assertSequenceEqual(list(name for name in t.visit()), ('', '.Comp', '.Comp.shortTest', '.Comp.byteTest', '.shortTest'))
+
+    def test_walk_list(self):
+        t, name, _ = TAG.parse(bytes.fromhex(SOME_LIST), 0)
+        self.assertSequenceEqual([name for name, *_ in t.walk()], ['', '.0', '.1', '.2', '.3'])
 
 import gzip
 class TestCache(unittest.TestCase):
