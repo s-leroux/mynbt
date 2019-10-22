@@ -22,7 +22,7 @@ class TestRegion(unittest.TestCase):
 
     def test_set_chunk(self):
         region = Region()
-        region.set_chunk(1,2, nbt.TAG_Int(3))
+        region.set_chunk(1,2, nbt.Integer(3))
         chunk = region.chunk_info(1,2)
         self.assertEqual((chunk.x,chunk.z), (1, 2))
         self.assertGreater(len(chunk.data), 0)
@@ -43,7 +43,7 @@ class TestRegion(unittest.TestCase):
 
     def test_write_chunk(self):
         region = Region()
-        region.set_chunk(1,2, nbt.TAG_Int(3))
+        region.set_chunk(1,2, nbt.Integer(3))
 
 
         stream = BytesIO()

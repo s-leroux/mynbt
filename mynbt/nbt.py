@@ -5,6 +5,8 @@ import collections
 
 import io
 
+from mynbt.visitor import Visitor
+
 class TAG:
     def export(self, *, compact=True):
         """ Export a NBT data structure as Python native objects.
@@ -39,7 +41,7 @@ class TAG:
         return trait, offset
 
     @staticmethod
-    def parse(base, offset, parent = None):
+    def parse(base, offset=0, parent=None):
         base = memoryview(base)
         start = offset
         name = None
@@ -124,21 +126,6 @@ class Node:
         """
         yield from ()
 
-    class Visitor:
-        def enter(self, path, node):
-            pass
-
-        def leave(self, path, node):
-            pass
-
-    class TraceVisitor:
-        def enter(self, path, node):
-            return ("enter", path)
-
-        def leave(self, path, node):
-            return ("leave", path)
-
-
     def visit(self, visitor=Visitor(), *, rootname="", filter=lambda path, node: True):
         """ Iterate over the NBT tree in depth-first order, calling
             the visitor's methods when entering and leaving the node
@@ -171,12 +158,16 @@ class Node:
             The filter parameter controls if the subtree at path
             should be explored
         """
-        class V(Node.Visitor):
+        class V(Visitor):
             def enter(self, path, node):
                 return (path, node)
 
         return self.visit(V(), rootname=rootname,filter=filter)
-        
+    
+    def accept(self, visitor):
+        """ Call the most specialized visitor method for this node
+        """
+        return visitor.visitNode()
 
     #------------------------------------
     # Exporting NBT values
@@ -241,6 +232,9 @@ class Integer(int, Value):
 
     def __init__(self, value, *, trait = None, payload = None, parent = None):
         Node.__init__(self, trait = trait or IntTrait, payload = payload, parent = parent)
+    
+    def accept(self, visitor):
+        return visitor.visitInteger()
 
 class Float(float, Value):
     def __new__(cls, value, **kwargs):
@@ -248,6 +242,9 @@ class Float(float, Value):
 
     def __init__(self, value, *, trait = None, payload = None, parent = None):
         Node.__init__(self, trait = trait or DoubleTrait, payload = payload, parent = parent)
+    
+    def accept(self, visitor):
+        return visitor.visitFloat()
 
 class String(str, Value):
     def __new__(cls, value, **kwargs):
@@ -255,6 +252,9 @@ class String(str, Value):
 
     def __init__(self, value, *, trait = None, payload = None, parent = None):
         Node.__init__(self, trait = trait or StringTrait, payload = payload, parent = parent)
+    
+    def accept(self, visitor):
+        return visitor.visitString()
 
 # ==================================================================== 
 # Proxy
