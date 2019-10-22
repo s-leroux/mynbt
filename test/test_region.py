@@ -37,9 +37,10 @@ class TestRegion(unittest.TestCase):
     def test_chunk_iterator(self):
         region = Region.open("test/data/region-r.0.0.mca")
         with region.chunk(1,2) as chunk:
-          print(chunk)
-        # print(chunk.Level.Entities.export())
-        # print(chunk.Level.export(scope=['xPos', 'zPos']))
+          # print(chunk)
+          # print(chunk.Level.Entities.export())
+          # print(chunk.Level.export(scope=['xPos', 'zPos']))
+          pass
 
     def test_write_chunk(self):
         region = Region()
@@ -59,4 +60,4 @@ class TestRegion(unittest.TestCase):
 
         region = Region.open('test/tmp/dump.bin')
         chunk = region.parse_chunk(1,2)
-        print(chunk)
+        # print(chunk)
