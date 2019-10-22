@@ -133,10 +133,10 @@ class Node:
 
     class TraceVisitor:
         def enter(self, path, node):
-            yield ("enter", path)
+            return ("enter", path)
 
         def leave(self, path, node):
-            yield ("leave", path)
+            return ("leave", path)
 
 
     def visit(self, visitor=Visitor(), *, rootname="", filter=lambda path, node: True):
@@ -147,24 +147,22 @@ class Node:
             should be explored
         """
         def enter(path, node):
-            yield from visitor.enter(path, node) or ()
-            # for v in visitor.enter(path, node) or ()
-            #    yield v
-
             stack.append((path, node, leave))
             if filter(path, node):
                 for childname, childnode in reversed(list(node.children())):
                     stack.append((path + "." + str(childname), childnode, enter))
 
+            return visitor.enter(path, node)
+
         def leave(path, node):
-            yield from visitor.leave(path, node) or ()
-            # for v in visitor.leave(path, node) or ()
-            #    yield v
+            return visitor.leave(path, node)
 
         stack = [(rootname, self, enter)]
         while stack:
             path, node, action = stack.pop()
-            yield from action(path, node)
+            result = action(path, node)
+            if result is not None:
+                yield result
 
     def walk(self, *, rootname="", filter=lambda path, node: True):
         """ Iterate over the NBT tree yielding (path, node) tupple
@@ -175,9 +173,9 @@ class Node:
         """
         class V(Node.Visitor):
             def enter(self, path, node):
-                yield (path, node)
+                return (path, node)
 
-        yield from self.visit(V(), rootname=rootname,filter=filter)
+        return self.visit(V(), rootname=rootname,filter=filter)
         
 
     #------------------------------------
