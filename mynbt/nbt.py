@@ -5,22 +5,9 @@ import collections
 
 import io
 
-from mynbt.visitor import Visitor
+from mynbt.visitor import Visitor, Exporter
 
 class TAG:
-    def export(self, *, compact=True):
-        """ Export a NBT data structure as Python native objects.
-        """
-        value = self.value
-
-        if compact:
-          return value
-        else:
-          return {
-            'type': self.__class__.__name__,
-            'value': value,
-          }
-
     @staticmethod
     def parse_id(base, offset):
         ID, = unpack('>B',bytes(base[offset:offset+1]))
@@ -126,41 +113,47 @@ class Node:
         """
         yield from ()
 
-    def visit(self, visitor=Visitor(), *, rootname="", filter=lambda path, node: True):
+    def visit(self, visitor=Visitor(), *, rootname="", filter=lambda path, name, node: True):
         """ Iterate over the NBT tree in depth-first order, calling
             the visitor's methods when entering and leaving the node
 
             The filter parameter controls if the subtree at path
             should be explored
         """
-        def enter(path, node):
-            stack.append((path, node, leave))
-            if filter(path, node):
+        def curry(f, *args):
+            return lambda : f(*args)
+
+        def enter(path, name, node):
+            stack.append(curry(leave, path, name, node))
+            if filter(path, name, node):
                 for childname, childnode in reversed(list(node.children())):
-                    stack.append((path + "." + str(childname), childnode, enter))
+                    stack.append(curry(enter, path + "." + str(childname), str(childname), childnode))
 
-            return visitor.enter(path, node)
+            return visitor.enter(path, name, node)
 
-        def leave(path, node):
-            return visitor.leave(path, node)
+        def leave(path, name, node):
+            return visitor.leave(path, name, node)
 
-        stack = [(rootname, self, enter)]
+        def close():
+            return visitor.close()
+
+        stack = [close, curry(enter, rootname, rootname, self)]
         while stack:
-            path, node, action = stack.pop()
-            result = action(path, node)
+            action = stack.pop()
+            result = action()
             if result is not None:
                 yield result
 
-    def walk(self, *, rootname="", filter=lambda path, node: True):
-        """ Iterate over the NBT tree yielding (path, node) tupple
+    def walk(self, *, rootname="", filter=lambda path, name, node: True):
+        """ Iterate over the NBT tree yielding (path, name, node) tupple
             for each item.
 
             The filter parameter controls if the subtree at path
             should be explored
         """
         class V(Visitor):
-            def enter(self, path, node):
-                return (path, node)
+            def enter(self, path, name, node):
+                return (path, name, node)
 
         return self.visit(V(), rootname=rootname,filter=filter)
     
@@ -194,7 +187,9 @@ class Node:
         output.write(self._payload)
 
     def export(self, *, compact=True):
-        raise NotImplementedError
+        if not compact:
+            raise NotImplementedError
+        return self.visit(Exporter())
 
     def value(self):
         return self
@@ -393,19 +388,6 @@ class CompoundNode(Node, collections.abc.MutableMapping, collections.abc.Hashabl
     #------------------------------------
     def children(self):
         return sorted(self._items.items())
-
-    def export(self, *, scope=None, compact=True):
-        """ Export a NBT data structure as Python native objects.
-        """
-        value = {k: v.export(compact=compact) for k, v in self._items.items() if (scope is None) or (k in scope)}
-
-        if compact:
-          return value
-        else:
-          return {
-            'type': self.__class__.__name__,
-            'value': value
-          }
 
     def write_payload(self, output):
         for name, item in self._items.items():

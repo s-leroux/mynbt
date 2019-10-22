@@ -7,17 +7,25 @@ class Visitor:
         Default implementations do nothing
     """
 
-    def enter(self, path, node):
+    def enter(self, path, name, node):
         pass
 
-    def leave(self, path, node):
+    def leave(self, path, name, node):
+        pass
+
+    def close(self):
+        """ Called by node.visit when the NBT tree has been entirely traversed.
+
+            No other method of the visitor should be called after close() has
+            been issued.
+        """
         pass
 
 class TraceVisitor(Visitor):
-    def enter(self, path, node):
+    def enter(self, path, name, node):
         return ("enter", path)
 
-    def leave(self, path, node):
+    def leave(self, path, name, node):
         return ("leave", path)
 
 class SmartVisitor(Visitor):
@@ -32,9 +40,10 @@ class SmartVisitor(Visitor):
         a more generic function up until `visitNode`
     """
     class Action:
-        def __init__(self, visitor, path, node):
+        def __init__(self, visitor, path, name, node):
             self._visitor = visitor
             self._path = path
+            self._name = name
             self._node = node
 
         def visitNode(self):
@@ -80,33 +89,33 @@ class SmartVisitor(Visitor):
     class Leave(Action):
         pass
 
-    def enter(self, path, node):
-        return node._trait.accept(self.Enter(self, path, node))
+    def enter(self, path, name, node):
+        return node._trait.accept(self.Enter(self, path, name, node))
 
-    def leave(self, path, node):
-        return node._trait.accept(self.Leave(self, path, node))
+    def leave(self, path, name, node):
+        return node._trait.accept(self.Leave(self, path, name, node))
 
-class DSmartVisitor(SmartVisitor):
+class TraceSmartVisitor(SmartVisitor):
     class Enter(SmartVisitor.Enter):
         def __getattribute__(self, attr):
             if (attr.startswith('visit')):
-                print(attr)
+                return lambda : attr
 
             return super().__getattribute__(attr)
-        def visitNode(self):
-            print('visitNode at '+self._path, type(self._node))
-        def visitAtom(self):
-            print('visitAtom at '+self._path, type(self._node))
-        def visitInteger(self):
-            print('visitInteger at '+self._path, type(self._node))
-        def visitString(self):
-            print('visitString at '+self._path, type(self._node))
-        def visitArray(self):
-            print('visitArray at '+self._path, type(self._node))
-        def visitList(self):
-            print('visitList at '+self._path, type(self._node))
-        def visitCompound(self):
-            print('visitCompound at '+self._path, type(self._node))
+        # def visitNode(self):
+        #     print('visitNode at '+self._path, type(self._node))
+        # def visitAtom(self):
+        #     print('visitAtom at '+self._path, type(self._node))
+        # def visitInteger(self):
+        #     print('visitInteger at '+self._path, type(self._node))
+        # def visitString(self):
+        #     print('visitString at '+self._path, type(self._node))
+        # def visitArray(self):
+        #     print('visitArray at '+self._path, type(self._node))
+        # def visitList(self):
+        #     print('visitList at '+self._path, type(self._node))
+        # def visitCompound(self):
+        #     print('visitCompound at '+self._path, type(self._node))
 
 class Exporter(SmartVisitor):
     def __init__(self):
@@ -114,14 +123,14 @@ class Exporter(SmartVisitor):
 
     class Enter(SmartVisitor.Enter):
         def visitAtom(self):
-            self._visitor._stack[-1][self._path] = self._node.value()
+            self._visitor._stack[-1][self._name] = self._node.value()
         def visitCompound(self):
             self._visitor._stack.append({})
-
     class Leave(SmartVisitor.Leave):
         def visitCompound(self):
             node = self._visitor._stack.pop()
-            self._visitor._stack[-1][self._path] = node
+            self._visitor._stack[-1][self._name] = node
 
-            if len(self._visitor._stack) == 1:
-              return self._visitor._stack.pop()['']
+    def close(self):
+        assert len(self._stack) == 1
+        return self._stack[0]['']
