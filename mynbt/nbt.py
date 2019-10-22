@@ -295,7 +295,7 @@ class ArrayProxy(Proxy):
 
 class StringProxy(Proxy):
     def unpack(self):
-        return bytes(self._payload[2:]).decode("utf8") # XXX unneeded (?) copy
+        return bytes(self._payload).decode("utf8") # XXX unneeded (?) copy
 
 class ListNode(Node, collections.abc.MutableSequence, collections.abc.Hashable):
     def __init__(self, *, trait, payload, parent):

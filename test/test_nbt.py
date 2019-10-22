@@ -107,7 +107,7 @@ class TestNodeComparisons(unittest.TestCase):
 
 class TestParsing(unittest.TestCase):
     def test_parse_id(self):
-        data = bytes.fromhex(SOME_SHORT)
+        data = SOME_SHORT.BYTES
         offset = 0
         id, offset = TAG.parse_id(data, offset)
 
@@ -115,7 +115,7 @@ class TestParsing(unittest.TestCase):
         self.assertEqual(id, 2)
 
     def test_parse_name(self):
-        data = bytes.fromhex(SOME_SHORT)
+        data = SOME_SHORT.BYTES
         offset = 1
         name, offset = TAG.parse_name(data, offset)
 
@@ -124,7 +124,7 @@ class TestParsing(unittest.TestCase):
 
     def test_Short(self):
         reader = AtomReader(ShortTrait)
-        data = bytes.fromhex(SOME_SHORT)
+        data = SOME_SHORT.BYTES
         offset = 0
         id, offset = TAG.parse_id(data, offset)
         name, offset = TAG.parse_name(data, offset)
@@ -162,7 +162,7 @@ class TestParseFiles(unittest.TestCase):
 
 class TestListTag(unittest.TestCase):
     def test_parse_list(self):
-        data = bytes.fromhex(SOME_LIST + "FF")
+        data = bytes.fromhex(SOME_LIST.HEX + "FF")
         nbt, name, offset = TAG.parse(data, 0)
         self.assertEqual(data[offset:], b"\xFF")
         self.assertIsInstance(nbt, ListNode)
@@ -175,8 +175,8 @@ class TestListTag(unittest.TestCase):
           self.assertEqual(nbt[4], 4)
 
     def test_set_item(self):
-        nbt, *_ = TAG.parse(bytes.fromhex(SOME_LIST), 0)
-        val, *_ = TAG.parse(bytes.fromhex(SOME_SHORT), 0)
+        nbt, *_ = TAG.parse(SOME_LIST.BYTES, 0)
+        val, *_ = TAG.parse(SOME_SHORT.BYTES, 0)
 
         self.assertIsNot(nbt[0], val)
         self.assertIsNotNone(nbt._payload)
@@ -186,8 +186,8 @@ class TestListTag(unittest.TestCase):
         self.assertIsNone(nbt._payload)
 
     def test_append(self):
-        nbt, *_ = TAG.parse(bytes.fromhex(SOME_LIST), 0)
-        val, *_ = TAG.parse(bytes.fromhex(SOME_SHORT), 0)
+        nbt, *_ = TAG.parse(SOME_LIST.BYTES, 0)
+        val, *_ = TAG.parse(SOME_SHORT.BYTES, 0)
 
         with self.assertRaises(IndexError):
           self.assertEqual(nbt[4], 4)
@@ -199,7 +199,7 @@ class TestListTag(unittest.TestCase):
         self.assertIsNone(nbt._payload)
 
     def test_del_item(self):
-        nbt, *_ = TAG.parse(bytes.fromhex(SOME_LIST), 0)
+        nbt, *_ = TAG.parse(SOME_LIST.BYTES, 0)
         self.assertEqual(len(nbt), 4)
         self.assertEqual(nbt[0], 0)
         self.assertEqual(nbt[1], 1)
@@ -236,7 +236,7 @@ class TestCompoundTag(unittest.TestCase):
         self.assertIn('GameRules', list(item.keys()))
 
     def test_get_value_in_compount(self):
-        t, _, _ = TAG.parse(bytes.fromhex(SOME_COMPOUND), 0)
+        t, _, _ = TAG.parse(SOME_COMPOUND.BYTES, 0)
         self.assertEqual(t.shortTest, 32767)
 
     def test_get_value(self):
@@ -244,16 +244,16 @@ class TestCompoundTag(unittest.TestCase):
         self.assertEqual(t, 32767)
 
     def test_nested_compound(self):
-        t, name, _ = TAG.parse(bytes.fromhex(SOME_NESTED_COMPOUND), 0)
+        t, name, _ = TAG.parse(SOME_NESTED_COMPOUND.BYTES, 0)
         self.assertEqual(name, 'Data')
         child = t._items['Comp']
 
     def test_path(self):
-        t, *_ = TAG.parse(bytes.fromhex(SOME_NESTED_COMPOUND), 0)
+        t, *_ = TAG.parse(SOME_NESTED_COMPOUND.BYTES, 0)
         self.assertEqual(t.Comp.shortTest, 32767)
 
     def test_del_item(self):
-        nbt, *_ = TAG.parse(bytes.fromhex(SOME_NESTED_COMPOUND), 0)
+        nbt, *_ = TAG.parse(SOME_NESTED_COMPOUND.BYTES, 0)
         self.assertEqual(len(nbt.Comp), 2)
         self.assertEqual(nbt.Comp['byteTest'], 127)
         self.assertEqual(nbt.Comp['shortTest'], 32767)
@@ -268,35 +268,48 @@ class TestCompoundTag(unittest.TestCase):
 
 class TestExport(unittest.TestCase):
     CASES = (
-      dict(dump=SOME_SHORT, value=32767, extended={'type': 'TAG_Short', 'value': 32767}),
-      dict(dump=SOME_COMPOUND, value=dict(shortTest=32767, byteTest=127), extended=dict(type='TAG_Compound', value={'shortTest': {'type': 'TAG_Short', 'value': 32767}, 'byteTest':{'type':'TAG_Byte', 'value':127}})),
+      dict(dump=SOME_SHORT.BYTES, value=32767, extended={'type': 'TAG_Short', 'value': 32767}),
+      dict(dump=SOME_COMPOUND.BYTES, value=dict(shortTest=32767, byteTest=127), extended=dict(type='TAG_Compound', value={'shortTest': {'type': 'TAG_Short', 'value': 32767}, 'byteTest':{'type':'TAG_Byte', 'value':127}})),
     )
 
-    def test_export_short(self):
-        for case in self.CASES:
-          t, *_ = TAG.parse(bytes.fromhex(case['dump']), 0)
-          
-          x = t.export()
-          x, =x
-          self.assertEqual(x, case['value'])
+    def _test_export(self, data, expected):
+          t, *_ = TAG.parse(data.BYTES)
+
+          x, = t.export()
+          self.assertEqual(x, expected)
 
           x, = t.export(compact=True)
-          self.assertEqual(x, case['value'])
+          self.assertEqual(x, expected)
+    
+    def _test_export_frame(self, frame, value):
+          self._test_export(frame(value), value)
 
-          # [x] = t.export(compact=False)
-          # self.assertEqual(x, case['extended'])
+    def test_export_short(self):
+        self._test_export_frame(SHORT_FRAME, 32767)
+
+    def test_export_int(self):
+        self._test_export_frame(INT_FRAME, 32767)
+
+    def test_export_long(self):
+        self._test_export_frame(LONG_FRAME, 32767)
+
+    def test_export_string(self):
+        self._test_export_frame(STRING_FRAME, "Some String")
+
+    def test_export_byte_array(self):
+        self._test_export_frame(BYTE_ARRAY_FRAME, [1,2,3,4,5,6,7])
 
     def test_walk_compound(self):
-        t, name, _ = TAG.parse(bytes.fromhex(SOME_NESTED_COMPOUND), 0)
+        t, name, _ = TAG.parse(SOME_NESTED_COMPOUND.BYTES, 0)
         self.assertEqual(set(name for name, *_ in t.walk()), set(('', '.Comp', '.Comp.shortTest', '.Comp.byteTest', '.shortTest')))
 
     # walk is now implemented with a Visitor
     # def test_visit_compound(self):
-    #     t, name, _ = TAG.parse(bytes.fromhex(SOME_NESTED_COMPOUND), 0)
+    #     t, name, _ = TAG.parse(SOME_NESTED_COMPOUND.BYTES, 0)
     #     self.assertSequenceEqual(list(name for name in t.visit()), ('', '.Comp', '.Comp.shortTest', '.Comp.byteTest', '.shortTest'))
 
     def test_walk_list(self):
-        t, name, _ = TAG.parse(bytes.fromhex(SOME_LIST), 0)
+        t, name, _ = TAG.parse(SOME_LIST.BYTES, 0)
         self.assertSequenceEqual([name for name, *_ in t.walk()], ['', '.0', '.1', '.2', '.3'])
 
 import gzip
@@ -311,7 +324,7 @@ class TestCache(unittest.TestCase):
     def test_parent_tracking(self):
         """ Nested elements shoud track their parent as weak links
         """
-        t, *_ = TAG.parse(bytes.fromhex(SOME_NESTED_COMPOUND), 0)
+        t, *_ = TAG.parse(SOME_NESTED_COMPOUND.BYTES, 0)
         child = t._items['Comp']
         data = t._items['shortTest']
 
@@ -322,7 +335,7 @@ class TestCache(unittest.TestCase):
     def test_invalidate(self):
         """ Invalidte should invalidate the whole ancestors chain
         """
-        t, *_ = TAG.parse(bytes.fromhex(SOME_NESTED_COMPOUND), 0)
+        t, *_ = TAG.parse(SOME_NESTED_COMPOUND.BYTES, 0)
         child1 = t._items['Comp']
         child2 = t._items['shortTest']
         data = child1._items['shortTest']
@@ -346,8 +359,8 @@ class TestSetValue(unittest.TestCase):
     def test_set_value_compound(self):
         """ Compound items can be updated
         """
-        nbt, *_ = TAG.parse(bytes.fromhex(SOME_COMPOUND), 0)
-        val, *_ = TAG.parse(bytes.fromhex(SOME_SHORT), 0)
+        nbt, *_ = TAG.parse(SOME_COMPOUND.BYTES, 0)
+        val, *_ = TAG.parse(SOME_SHORT.BYTES, 0)
 
         nbt.x = val
         self.assertIn("x", nbt.keys())
@@ -356,8 +369,8 @@ class TestSetValue(unittest.TestCase):
     def test_copy(self):
         """ Items can be copied between compounds
         """
-        nbt, *_ = TAG.parse(bytes.fromhex(SOME_COMPOUND), 0)
-        other, *_ = TAG.parse(bytes.fromhex(EMPTY_COMPOUND), 0)
+        nbt, *_ = TAG.parse(SOME_COMPOUND.BYTES, 0)
+        other, *_ = TAG.parse(EMPTY_COMPOUND.BYTES, 0)
 
         other.x = nbt.shortTest
         self.assertIn("x", other.keys())
@@ -368,7 +381,7 @@ class TestWrite(unittest.TestCase):
     def test_write_atom(self):
         """ It should write back atomic values
         """
-        data = bytes.fromhex(SOME_SHORT)
+        data = SOME_SHORT.BYTES
         nbt, name, _ = TAG.parse(data, 0)
 
         output = io.BytesIO()
@@ -379,7 +392,7 @@ class TestWrite(unittest.TestCase):
     def test_write_compound(self):
         """ It should write back compound values
         """
-        data = bytes.fromhex(SOME_NESTED_COMPOUND)
+        data = SOME_NESTED_COMPOUND.BYTES
         nbt, name, _ = TAG.parse(data, 0)
 
         output = io.BytesIO()
@@ -390,7 +403,7 @@ class TestWrite(unittest.TestCase):
     def test_write_change(self):
         """ It should write changes
         """
-        data = bytes.fromhex(SOME_COMPOUND)
+        data = SOME_COMPOUND.BYTES
         nbt, name, _ = TAG.parse(data, 0)
 
         nbt.shortTest = 0x1234
@@ -403,7 +416,7 @@ class TestWrite(unittest.TestCase):
     def test_write_copies(self):
         """ It should write items copied from other nbt
         """
-        data = bytes.fromhex(SOME_COMPOUND)
+        data = SOME_COMPOUND.BYTES
         nbt, name, _ = TAG.parse(data, 0)
 
         nbt.otherShort = nbt.shortTest
