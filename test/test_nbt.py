@@ -199,7 +199,8 @@ class TestListTag(unittest.TestCase):
         self.assertIsNone(nbt._payload)
 
     def test_del_item(self):
-        nbt, *_ = TAG.parse(SOME_LIST.BYTES, 0)
+        TEST_DATA=LIST_FRAME(SHORT, [0,1,2,3])
+        nbt, *_ = TAG.parse(TEST_DATA.BYTES)
         self.assertEqual(len(nbt), 4)
         self.assertEqual(nbt[0], 0)
         self.assertEqual(nbt[1], 1)

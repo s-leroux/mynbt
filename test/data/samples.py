@@ -4,10 +4,36 @@
 # ====================================================================
 NAME=lambda s: (len(s).to_bytes(2, 'big') + s.encode('utf8')).hex()
 STRING=NAME
+
+END = lambda : "00"
 BYTE = lambda n: n.to_bytes(1, 'big').hex()
 SHORT = lambda n: n.to_bytes(2, 'big').hex()
 INT = lambda n: n.to_bytes(4, 'big').hex()
 LONG = lambda n: n.to_bytes(8, 'big').hex()
+FLOAT = lambda : ""
+DOUBLE = lambda : ""
+BYTE_ARRAY = lambda : ""
+STRING = NAME
+LIST = lambda : ""
+COMPOUND = lambda : ""
+INT_ARRAY = lambda : ""
+LONG_ARRAY = lambda : ""
+
+(
+    END.ID,
+    BYTE.ID,
+    SHORT.ID,
+    INT.ID,
+    LONG.ID,
+    FLOAT.ID,
+    DOUBLE.ID,
+    BYTE_ARRAY.ID,
+    STRING.ID,
+    LIST.ID,
+    COMPOUND.ID,
+    INT_ARRAY.ID,
+    LONG_ARRAY.ID,
+  ) = ("{:02x}".format(n) for n in range(13))
 
 class FRAME:
   def __init__(self, *content):
@@ -24,64 +50,46 @@ class FRAME:
     WITH_NAME("Hello", STRING_FRAME)("World")
 
     equivalent to
-    STRING_FRAME("World", "Hello")
+    STRING_FRAME("World", name="Hello")
 """
 def WITH_NAME(name, frame):
     return lambda *args : frame(*args, name=name)
-
-class ID: (
-    END,
-    BYTE,
-    SHORT,
-    INT,
-    LONG,
-    FLOAT,
-    DOUBLE,
-    BYTE_ARRAY,
-    STRING,
-    LIST,
-    COMPOUND,
-    INT_ARRAY,
-    LONG_ARRAY,
-  ) = ("{:02x}".format(n) for n in range(13))
-
-END=ID.END
 
 # ==================================================================== 
 # Atomic values
 # ====================================================================
 SOME_BYTE = FRAME(
-  ID.BYTE,
+  BYTE.ID,
   NAME("byteTest"),
   "7F"
 )
 
 BYTE_FRAME = lambda v, name="byteTest" : FRAME(
-  ID.BYTE,
+  BYTE.ID,
   NAME(name),
     BYTE(v)
 )
 
 SHORT_FRAME = lambda v, name="shortTest" : FRAME(
-  ID.SHORT,
+  SHORT.ID,
   NAME(name),
     SHORT(v)
 )
 
 INT_FRAME = lambda v, name = "intTest" : FRAME(
-  ID.INT,
+  INT.ID,
   NAME(name),
     INT(v)
 )
 
 LONG_FRAME = lambda v, name = "longTest" : FRAME(
-  ID.LONG,
+  LONG.ID,
   NAME(name),
     LONG(v)
 )
 
 STRING_FRAME = lambda v, name = "stringTest" : FRAME(
-  ID.STRING,
+  STRING.ID,
   NAME(name),
     STRING(v)
 )
@@ -93,10 +101,10 @@ SOME_SHORT = SHORT_FRAME(32767)
 # ====================================================================
 
 COMPOUND_FRAME = lambda *frames, name="compoundTest" : FRAME(
-  ID.COMPOUND,
+  COMPOUND.ID,
   NAME(name),
     *frames,
-  END
+  END()
 )
 
 SOME_COMPOUND = WITH_NAME("Comp", COMPOUND_FRAME)( 
@@ -113,7 +121,7 @@ EMPTY_COMPOUND = WITH_NAME("Empty", COMPOUND_FRAME)()
 # Arrays
 # ====================================================================
 BYTE_ARRAY_FRAME = lambda v, name = "byteArrayTest" : FRAME(
-  ID.BYTE_ARRAY,
+  BYTE_ARRAY.ID,
   NAME(name),
     INT(len(v)),
     *(BYTE(n) for n in v)
@@ -121,21 +129,21 @@ BYTE_ARRAY_FRAME = lambda v, name = "byteArrayTest" : FRAME(
 
 # There is currently no TAG_ShortArray
 # SHORT_ARRAY_FRAME = lambda v, name = "shortArrayTest" : FRAME(
-#   ID.SHORT_ARRAY,
+#   SHORT_ARRAY.ID,
 #   NAME(name),
 #     INT(len(v)),
 #     *(SHORT(n) for n in v)
 # )
 
 INT_ARRAY_FRAME = lambda v, name = "intArrayTest" : FRAME(
-  ID.INT_ARRAY,
+  INT_ARRAY.ID,
   NAME(name),
     INT(len(v)),
     *(INT(n) for n in v)
 )
 
 LONG_ARRAY_FRAME = lambda v, name = "longArrayTest" : FRAME(
-  ID.LONG_ARRAY,
+  LONG_ARRAY.ID,
   NAME(name),
     INT(len(v)),
     *(LONG(n) for n in v)
@@ -146,14 +154,14 @@ SOME_BYTE_ARRAY = BYTE_ARRAY_FRAME([1,2,3,4])
 # ==================================================================== 
 # Lists
 # ====================================================================
-SOME_LIST = FRAME(
-  ID.LIST,
-  NAME("List"),
-    ID.SHORT,                     # paylod tag id
-    INT(4), # count
-    SHORT(0),
-    SHORT(1),
-    SHORT(2),
-    SHORT(3),
+LIST_FRAME = lambda t, data, name = "listTest" : FRAME(
+  LIST.ID,
+  NAME(name),
+    t.ID,
+    INT(len(data)),
+    *(t(v) for v in data)
+)
+SOME_LIST = WITH_NAME("List", LIST_FRAME)(
+    SHORT, [0,1,2,3]
 )
 
