@@ -127,7 +127,7 @@ class Node:
             stack.append(curry(leave, path, name, node))
             if filter(path, name, node):
                 for childname, childnode in reversed(list(node.children())):
-                    stack.append(curry(enter, path + "." + str(childname), str(childname), childnode))
+                    stack.append(curry(enter, path + "." + str(childname), childname, childnode))
 
             return visitor.enter(path, name, node)
 
@@ -236,6 +236,66 @@ class String(str, Value):
 
     def __init__(self, value, *, trait = None, payload = None, parent = None):
         Node.__init__(self, trait = trait or StringTrait, payload = payload, parent = parent)
+
+class Array(Value):
+    def __init__(self, values, *, trait, payload = None, parent = None):
+        Node.__init__(self, trait = trait, payload = payload, parent = parent)
+        self._items = [Integer(v, trait=trait.TYPE, parent=self) for v, in values]
+
+    #------------------------------------
+    # Node interface
+    #------------------------------------
+    def children(self):
+        return enumerate(self._items)
+
+    def write_payload(self, output):
+        output.write(len(self._items).to_bytes(4, 'big'))
+        for item in self._items:
+            item.write_payload(output)
+
+    #------------------------------------
+    # Proxy interface
+    #------------------------------------
+    def value(self):
+        return self
+
+    #------------------------------------
+    # Hashable interface
+    #------------------------------------
+    def __hash__(self):
+        return id(self)
+
+    #------------------------------------
+    # Mutable sequence interface
+    #------------------------------------
+    def __getitem__(self, idx):
+        node = self._items[idx]
+        value = node.value()
+
+        if value is not node:
+            value.register_parent(self)
+            self._items[idx] = value
+
+        return value
+
+    def __setitem__(self, idx, value):
+        self.invalidate()
+        value.register_parent(self)
+        self._items[idx] = value # XXX should promote native values to TAG_... ?
+
+    def __delitem__(self, idx):
+        self.invalidate()
+        # using a WeakKeyDictionary we may emulate multibag and remove self
+        # from the removed item parent list
+        del self._items[idx]
+
+    def __len__(self):
+        return len(self._items)
+
+    def insert(self, idx, value):
+        self.invalidate()
+        self._items.insert(idx, value)
+
     
 # ==================================================================== 
 # Proxy
@@ -278,7 +338,7 @@ class Proxy(Node):
         """ Return a value object corresponding to the payload
         """
         if self._value is None:
-            self._value = self._trait.VALUE(self.unpack(), payload=self._payload, trait=self._trait)
+            self._value = self._trait.VALUE(self.unpack(), trait=self._trait, payload=self._payload)
 
         return self._value
 
@@ -292,6 +352,12 @@ class AtomProxy(Proxy):
 class ArrayProxy(Proxy):
     def unpack(self):
         return iter_unpack(self._trait.FORMAT, self._payload[4:])
+
+    #------------------------------------
+    # Node interface
+    #------------------------------------
+    def children(self):
+        return self.value().children()
 
 class StringProxy(Proxy):
     def unpack(self):
@@ -311,19 +377,6 @@ class ListNode(Node, collections.abc.MutableSequence, collections.abc.Hashable):
     #------------------------------------
     def children(self):
         return enumerate(self._items)
-
-    def export(self, *, compact=True):
-        """ Export a NBT data structure as Python native objects.
-        """
-        value = [v.export(compact=compact) for v in self._items]
-
-        if compact:
-          return value
-        else:
-          return {
-            'type': self.__class__.__name__,
-            'value': value
-          }
 
     def write_payload(self, output):
         output.write(len(self._items).to_bytes(4, 'big'))
@@ -569,6 +622,7 @@ class AtomTrait(Trait):
 class ArrayTrait(Trait):
     READER = ArrayReader
     VISIT = 'visitArray'
+    VALUE = Array
 
 class EndTrait(Trait):
     ID = 0
@@ -617,19 +671,22 @@ class DoubleTrait(AtomTrait):
     VALUE = Float
     VISIT = 'visitDouble'
 
-class Byte_ArrayTrait(ArrayTrait):
+class ByteArrayTrait(ArrayTrait):
     ID = 7
     SIZE = 1
     FORMAT = ">b"
+    TYPE = ByteTrait
+    READER = ArrayReader
     VISIT = 'visitByteArray'
 
-class Int_ArrayTrait(ArrayTrait):
+class IntArrayTrait(ArrayTrait):
     ID = 11
     SIZE = 4
     FORMAT = ">i"
+    READER = ArrayReader
     VISIT = 'visitIntArray'
 
-class Long_ArrayTrait(ArrayTrait):
+class LongArrayTrait(ArrayTrait):
     ID = 12
     SIZE = 8
     FORMAT = ">q"

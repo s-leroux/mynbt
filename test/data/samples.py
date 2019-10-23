@@ -11,7 +11,7 @@ LONG = lambda n: n.to_bytes(8, 'big').hex()
 
 class FRAME:
   def __init__(self, *content):
-      self.HEX = "".join(str(c) for c in content)
+      self.HEX = " ".join(str(c) for c in content)
       self.BYTES = bytes.fromhex(self.HEX)
 
   def __str__(self):

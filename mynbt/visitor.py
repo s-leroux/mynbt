@@ -70,8 +70,10 @@ class SmartVisitor(Visitor):
             return self.visitFloatingPoint()
         def visitString(self):
             return self.visitAtom()
-        def visitArray(self):
+        def visitComposite(self):
             return self.visitNode()
+        def visitArray(self):
+            return self.visitComposite()
         def visitByteArray(self):
             return self.visitArray()
         def visitShortArray(self):
@@ -79,9 +81,9 @@ class SmartVisitor(Visitor):
         def visitLongArray(self):
             return self.visitArray()
         def visitList(self):
-            return self.visitNode()
+            return self.visitComposite()
         def visitCompound(self):
-            return self.visitNode()
+            return self.visitComposite()
 
     class Enter(Action):
         pass
@@ -118,19 +120,50 @@ class TraceSmartVisitor(SmartVisitor):
         #     print('visitCompound at '+self._path, type(self._node))
 
 class Exporter(SmartVisitor):
+    @staticmethod
+    def default_setter(name, node, top):
+        def _(idx, value):
+            raise "{name} cannot acccept {idx}"
+
+        return (_, name, node, top)
+
+    @staticmethod
+    def dict_setter(name, node, top):
+        dref = dict()
+        def _(name, value):
+            nonlocal dref
+            dref[name] = value
+
+        return (_, name, dref, top)
+
+    @staticmethod
+    def list_setter(name, node, top):
+        lref = list()
+        def _(idx, value):
+            nonlocal lref
+            lref.extend([None] * (1+idx - len(lref)))
+            lref[idx] = value
+            # print("added", lref, value, top)
+
+        return (_, name, lref, top)
+
     def __init__(self):
-        self._stack = [{}]
+        self._top = Exporter.dict_setter('', dict(), None)
+
 
     class Enter(SmartVisitor.Enter):
         def visitAtom(self):
-            self._visitor._stack[-1][self._name] = self._node.value()
+            self._visitor._top = Exporter.default_setter(self._name, self._node, self._visitor._top)
         def visitCompound(self):
-            self._visitor._stack.append({})
+            self._visitor._top = Exporter.dict_setter(self._name, self._node, self._visitor._top)
+        def visitArray(self):
+            self._visitor._top = Exporter.list_setter(self._name, self._node, self._visitor._top)
     class Leave(SmartVisitor.Leave):
-        def visitCompound(self):
-            node = self._visitor._stack.pop()
-            self._visitor._stack[-1][self._name] = node
+        def visitNode(self):
+            _, name, item, self._visitor._top = self._visitor._top
+            self._visitor._top[0](name, item)
 
     def close(self):
-        assert len(self._stack) == 1
-        return self._stack[0]['']
+        assert self._top, str(self.__top)
+        # print(self._top)
+        return self._top[2]['']

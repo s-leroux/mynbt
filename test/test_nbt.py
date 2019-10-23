@@ -418,7 +418,6 @@ class TestWrite(unittest.TestCase):
         """
         data = SOME_COMPOUND.BYTES
         nbt, name, _ = TAG.parse(data, 0)
-
         nbt.otherShort = nbt.shortTest
 
         output = io.BytesIO()
