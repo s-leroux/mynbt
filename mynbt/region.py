@@ -99,7 +99,7 @@ class Region:
         chunk_info = self.chunk_info(x,z)
         
         data = io.BytesIO()
-        chunk.write(data)
+        chunk.write_to(data)
         dump = data.getbuffer()
         dump = COMPRESSOR[compression](dump)
 

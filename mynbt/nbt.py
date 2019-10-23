@@ -160,7 +160,7 @@ class Node:
     #------------------------------------
     # Exporting NBT values
     #------------------------------------
-    def write(self, output, name=""):
+    def write_to(self, output, name=""):
         """ Write the NBT object to a file-like output.
             The output is assumed to be a binary stream
         """
@@ -177,7 +177,7 @@ class Node:
 
     def dump(self, name=""):
         output = io.BytesIO()
-        self.write(output, name)
+        self.write_to(output, name)
         return output.getbuffer()
 
     def write_payload(self, output):
@@ -381,7 +381,7 @@ class ListNode(Node, collections.abc.MutableSequence, collections.abc.Hashable):
     def write_payload(self, output):
         output.write(len(self._items).to_bytes(4, 'big'))
         for item in self._items:
-            item.write(output, name=None)
+            item.write_to(output, name=None)
 
     #------------------------------------
     # Proxy interface
@@ -444,7 +444,7 @@ class CompoundNode(Node, collections.abc.MutableMapping, collections.abc.Hashabl
 
     def write_payload(self, output):
         for name, item in self._items.items():
-            item.write(output, name=name)
+            item.write_to(output, name=name)
         output.write(b"\x00")
 
     #------------------------------------

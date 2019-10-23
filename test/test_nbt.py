@@ -402,7 +402,7 @@ class TestWrite(unittest.TestCase):
         nbt, name, _ = TAG.parse(data, 0)
 
         output = io.BytesIO()
-        nbt.write(output, name)
+        nbt.write_to(output, name)
 
         self.assertEqual(output.getbuffer(), data)
 
@@ -413,7 +413,7 @@ class TestWrite(unittest.TestCase):
         nbt, name, _ = TAG.parse(data, 0)
 
         output = io.BytesIO()
-        nbt.write(output, name)
+        nbt.write_to(output, name)
 
         self.assertEqual(output.getbuffer(), data)
 
@@ -426,7 +426,7 @@ class TestWrite(unittest.TestCase):
         nbt.shortTest = 0x1234
 
         output = io.BytesIO()
-        nbt.write(output, name)
+        nbt.write_to(output, name)
 
         self.assertIn(b'\x02\x00\tshortTest\x124', bytes(output.getbuffer()))
 
@@ -438,7 +438,7 @@ class TestWrite(unittest.TestCase):
         nbt.otherShort = nbt.shortTest
 
         output = io.BytesIO()
-        nbt.write(output, name)
+        nbt.write_to(output, name)
 
         self.assertIn(b'\x02\x00\x09shortTest\x7F\xFF', bytes(output.getbuffer()))
         self.assertIn(b'\x02\x00\x0AotherShort\x7F\xFF', bytes(output.getbuffer()))
