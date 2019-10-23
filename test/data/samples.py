@@ -44,6 +44,12 @@ SOME_BYTE = FRAME(
   "7F"
 )
 
+BYTE_FRAME = lambda v, name="byteTest" : FRAME(
+  ID.BYTE,
+  NAME(name),
+    BYTE(v)
+)
+
 SHORT_FRAME = lambda v, name="shortTest" : FRAME(
   ID.SHORT,
   NAME(name),
@@ -104,6 +110,29 @@ BYTE_ARRAY_FRAME = lambda v, name = "byteArrayTest" : FRAME(
     INT(len(v)),
     *(BYTE(n) for n in v)
 )
+
+# There is currently no TAG_ShortArray
+# SHORT_ARRAY_FRAME = lambda v, name = "shortArrayTest" : FRAME(
+#   ID.SHORT_ARRAY,
+#   NAME(name),
+#     INT(len(v)),
+#     *(SHORT(n) for n in v)
+# )
+
+INT_ARRAY_FRAME = lambda v, name = "intArrayTest" : FRAME(
+  ID.INT_ARRAY,
+  NAME(name),
+    INT(len(v)),
+    *(INT(n) for n in v)
+)
+
+LONG_ARRAY_FRAME = lambda v, name = "longArrayTest" : FRAME(
+  ID.LONG_ARRAY,
+  NAME(name),
+    INT(len(v)),
+    *(LONG(n) for n in v)
+)
+
 SOME_BYTE_ARRAY = BYTE_ARRAY_FRAME([1,2,3,4])
 
 # ==================================================================== 

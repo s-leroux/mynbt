@@ -284,6 +284,9 @@ class TestExport(unittest.TestCase):
     def _test_export_frame(self, frame, value):
           self._test_export(frame(value), value)
 
+    def test_export_byte(self):
+        self._test_export_frame(BYTE_FRAME, 127)
+
     def test_export_short(self):
         self._test_export_frame(SHORT_FRAME, 32767)
 
@@ -293,11 +296,24 @@ class TestExport(unittest.TestCase):
     def test_export_long(self):
         self._test_export_frame(LONG_FRAME, 32767)
 
+    def test_export_long(self):
+        self._test_export_frame(LONG_FRAME, 32767)
+
     def test_export_string(self):
         self._test_export_frame(STRING_FRAME, "Some String")
 
     def test_export_byte_array(self):
         self._test_export_frame(BYTE_ARRAY_FRAME, [1,2,3,4,5,6,7])
+
+    def test_export_int_array(self):
+        self._test_export_frame(INT_ARRAY_FRAME, [1,2,3,4,5,6,7])
+
+    # There is currently no TAG_ShortArray
+    # def test_export_short_array(self):
+    #     self._test_export_frame(SHORT_ARRAY_FRAME, [1,2,3,4,5,6,7])
+
+    def test_export_long_array(self):
+        self._test_export_frame(LONG_ARRAY_FRAME, [1,2,3,4,5,6,7])
 
     def test_walk_compound(self):
         t, name, _ = TAG.parse(SOME_NESTED_COMPOUND.BYTES, 0)

@@ -602,6 +602,7 @@ class TraitMetaclass(type):
         # collect traits IDs
         ID = dct.get('ID')
         if ID is not None:
+          assert ID not in meta.TRAITS, "duplicate ID for " + cls.__class__.__name__ + " and " + meta.TRAITS[ID].__class__.__name__
           meta.TRAITS[ID] = cls
 
         return cls
@@ -676,21 +677,20 @@ class ByteArrayTrait(ArrayTrait):
     SIZE = 1
     FORMAT = ">b"
     TYPE = ByteTrait
-    READER = ArrayReader
     VISIT = 'visitByteArray'
 
 class IntArrayTrait(ArrayTrait):
     ID = 11
     SIZE = 4
     FORMAT = ">i"
-    READER = ArrayReader
+    TYPE = IntTrait
     VISIT = 'visitIntArray'
 
 class LongArrayTrait(ArrayTrait):
     ID = 12
     SIZE = 8
     FORMAT = ">q"
-    READER = ArrayReader
+    TYPE = LongTrait
     VISIT = 'visitLongArray'
 
 class StringTrait(Trait):

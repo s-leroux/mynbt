@@ -78,6 +78,8 @@ class SmartVisitor(Visitor):
             return self.visitArray()
         def visitShortArray(self):
             return self.visitArray()
+        def visitIntArray(self):
+            return self.visitArray()
         def visitLongArray(self):
             return self.visitArray()
         def visitList(self):
