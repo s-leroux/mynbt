@@ -17,6 +17,18 @@ class FRAME:
   def __str__(self):
       return self.HEX
 
+""" Small helper to avoid passing the frame name as a named parmeter
+    after the value(s) which ws somewhat counter-intuitive
+    
+    Usage:
+    WITH_NAME("Hello", STRING_FRAME)("World")
+
+    equivalent to
+    STRING_FRAME("World", "Hello")
+"""
+def WITH_NAME(name, frame):
+    return lambda *args : frame(*args, name=name)
+
 class ID: (
     END,
     BYTE,
@@ -79,27 +91,23 @@ SOME_SHORT = SHORT_FRAME(32767)
 # ==================================================================== 
 # Compounds
 # ====================================================================
-SOME_COMPOUND = FRAME(
+
+COMPOUND_FRAME = lambda *frames, name="compoundTest" : FRAME(
   ID.COMPOUND,
-  NAME("Comp"),
-    # payload
-    SOME_SHORT,
-    SOME_BYTE,
+  NAME(name),
+    *frames,
   END
 )
-SOME_NESTED_COMPOUND = FRAME(
-  ID.COMPOUND,
-  NAME("Data"),
-    # payload
-    SOME_SHORT,
-    SOME_COMPOUND,
-  END
+
+SOME_COMPOUND = WITH_NAME("Comp", COMPOUND_FRAME)( 
+  SOME_SHORT, SOME_BYTE,
 )
-EMPTY_COMPOUND = FRAME(
-  ID.COMPOUND,
-  NAME("Empty"),
-  END
+
+SOME_NESTED_COMPOUND = WITH_NAME("Data", COMPOUND_FRAME)(
+  SOME_SHORT, SOME_COMPOUND,
 )
+
+EMPTY_COMPOUND = WITH_NAME("Empty", COMPOUND_FRAME)()
 
 # ==================================================================== 
 # Arrays
