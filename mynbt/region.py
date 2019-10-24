@@ -88,16 +88,16 @@ class ChunkContextManager:
 
     def __exit__(self, exc_type, exc_value, traceback):
         if exc_type is None:
-            self._region.set_chunk(self._x, self._z, self._nbt) 
+            self._region.set_chunk(self._x, self._z, self._nbt)
 
 EmptyPage = bytes(PAGE_SIZE)
 from collections import namedtuple
 ChunkInfo = namedtuple('ChunkInfo', ['addr', 'size', 'timestamp', 'x', 'z', 'data'])
 EMPTY_CHUNK = ChunkInfo(0,0,0,0,0,memoryview(EmptyPage[0:0]))
 
-# ==================================================================== 
+# ====================================================================
 # Chunk
-# ==================================================================== 
+# ====================================================================
 class Chunk:
     """ Act as proxy to a chunk
     """
@@ -106,33 +106,32 @@ class Chunk:
         self._x = x
         self._z = z
 
-    class NBTContextManager:
-        def __init__(self, chunk, nbt):
-            self._chunk = chunk
-            self._nbt = nbt
-        
-        def __getattr__(self, name):
-            return getattr(self._nbt, name)
-        
-        def __setattr__(self, name, value):
-            return super().__setattr__(name, value) if name.startswith('_') else setattr(self._nbt, name, value)
-
-        def __str__(self):
-            return str(self._nbt)
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, *args):
-            if exc_type is None:
-                self._chunk.write(self._nbt)
-
     def parse(self):
+        """ Parse the chuck and returns the corresponding
+            NBT object wrapped in a context manager
+            to update the chunk on exit
+        """
+        chunk = self
         nbt = self._region.parse_chunk(self._x, self._z)
+        class ContextManager:
+            def __getattr__(self, name):
+                return getattr(nbt, name)
 
-        # add context manager behavior
-        return Chunk.NBTContextManager(self, nbt)
-    
+            def __setattr__(self, name, value):
+                return setattr(nbt, name, value)
+
+            def __str__(self):
+                return str(nbt)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, *args):
+                if exc_type is None:
+                    chunk.write(nbt)
+
+        return ContextManager()
+
     def write(self, nbt):
         self._region.write_chunk(self._x, self._z, nbt)
 
@@ -141,9 +140,9 @@ class Chunk:
     #   lambda self, data: self._region.set_chunk(self._x, self._z, data)
     # )
 
-# ==================================================================== 
+# ====================================================================
 # Region
-# ==================================================================== 
+# ====================================================================
 class Region:
     def __init__(self, data=b""):
       self._bitmap = None
@@ -180,7 +179,7 @@ class Region:
                 data = bytes(data) + bytes(missing_data)
 
             self._pagecount = max(self._pagecount, addr+size)
-            
+
             self._chunks[i] = ChunkInfo(addr, size, timestamp, x, z, data)
 
     def invalidate(self):
@@ -264,7 +263,7 @@ class Region:
         assert_in_range(z, 0, 32, 'z')
 
         chunk_info = self.chunk_info(x,z)
-        
+
         data = io.BytesIO()
         nbt.write_to(data)
         dump = data.getbuffer()
@@ -324,7 +323,7 @@ class Region:
         # walk over the chunk list to write the chunk offset and size in the file
         addr = 2
         for chunk in self._chunks:
-            
+
             size = (len(chunk.data)+4095)//4096
             if size == 0:
                 word = b"\x00\x00\x00\x00"
@@ -342,7 +341,7 @@ class Region:
         # walk over the chunk list to write the data
         for chunk in self._chunks:
             output.write(chunk.data)
-            
+
             pad = len(chunk.data)%4096
             if pad > 0:
                 output.write(EmptyPage[-pad:])
