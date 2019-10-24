@@ -83,17 +83,63 @@ class ChunkContextManager:
         self._z = z
 
     def __enter__(self):
-        self._chunk = self._region.parse_chunk(self._x, self._z)
-        return self._chunk
+        self._nbt = self._region.parse_chunk(self._x, self._z)
+        return self._nbt
 
     def __exit__(self, exc_type, exc_value, traceback):
         if exc_type is None:
-            self._region.set_chunk(self._x, self._z, self._chunk) 
+            self._region.set_chunk(self._x, self._z, self._nbt) 
 
 EmptyPage = bytes(PAGE_SIZE)
 from collections import namedtuple
 ChunkInfo = namedtuple('ChunkInfo', ['addr', 'size', 'timestamp', 'x', 'z', 'data'])
 EMPTY_CHUNK = ChunkInfo(0,0,0,0,0,memoryview(EmptyPage[0:0]))
+
+# ==================================================================== 
+# Chunk
+# ==================================================================== 
+class Chunk:
+    """ Act as proxy to a chunk
+    """
+    def __init__(self, region, x, z):
+        self._region = region
+        self._x = x
+        self._z = z
+
+    class NBTContextManager:
+        def __init__(self, chunk, nbt):
+            self._chunk = chunk
+            self._nbt = nbt
+        
+        def __getattr__(self, name):
+            return getattr(self._nbt, name)
+        
+        def __setattr__(self, name, value):
+            return super().__setattr__(name, value) if name.startswith('_') else setattr(self._nbt, name, value)
+
+        def __str__(self):
+            return str(self._nbt)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, *args):
+            if exc_type is None:
+                self._chunk.write(self._nbt)
+
+    def parse(self):
+        nbt = self._region.parse_chunk(self._x, self._z)
+
+        # add context manager behavior
+        return Chunk.NBTContextManager(self, nbt)
+    
+    def write(self, nbt):
+        self._region.write_chunk(self._x, self._z, nbt)
+
+    # data = property(
+    #   lambda self: self._region.get_chunk(self._x, self._z),
+    #   lambda self, data: self._region.set_chunk(self._x, self._z, data)
+    # )
 
 # ==================================================================== 
 # Region
@@ -260,6 +306,9 @@ class Region:
         self.set_chunk(to_x, to_z, self.get_chunk(from_x, from_z))
 
     def chunk(self, x, z):
+        return Chunk(self, x, z)
+
+    def chunk_cm(self, x, z):
       """ Return a context manager to modify and update a chunk from the region
       """
       return ChunkContextManager(self, x, z);

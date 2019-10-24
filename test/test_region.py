@@ -36,7 +36,7 @@ class TestRegion(unittest.TestCase):
         """ Region should compute logical page usage bitmap
         """
         region = Region(REGION(5*1024*1024,
-          CHUNK(3,4,pageaddr=5,pagecount=2,data=b"some data"),
+          CHUNK(3,4,pageaddr=5,pagecount=2,data=UTF8("some data")),
         ))
 
         bitmap = region.bitmap()
@@ -47,8 +47,8 @@ class TestRegion(unittest.TestCase):
         """ Region bitmap should trace overlapping chunks
         """
         region = Region(REGION(5*1024*1024,
-          CHUNK(0,1,pageaddr=4,pagecount=2,data=b"some data"),
-          CHUNK(3,4,pageaddr=5,pagecount=2,data=b"other data"),
+          CHUNK(0,1,pageaddr=4,pagecount=2,data=UTF8("some data")),
+          CHUNK(3,4,pageaddr=5,pagecount=2,data=UTF8("other data")),
         ))
 
         with warnings.catch_warnings(record=True) as w:
@@ -71,7 +71,7 @@ class TestRegion(unittest.TestCase):
 
             region = Region(REGION(5*1024*1024,
               # at page 1, date are in the region header
-              CHUNK(3,4,pageaddr=1,pagecount=2,data=b"some data"),
+              CHUNK(3,4,pageaddr=1,pagecount=2,data=UTF8("some data")),
             ))
 
             self.assertEqual(len(w), 1)
@@ -142,7 +142,7 @@ class TestRegion(unittest.TestCase):
     def test_parse_chunk(self):
         region = Region(REGION(10*PAGE_SIZE,
           CHUNK(1,2,pageaddr=4,pagecount=2,data=CHUNK_DATA(
-            SHORT_FRAME(123).BYTES
+            SHORT_FRAME(123)
           )),
         ))
         nbt = region.parse_chunk(1,2)
@@ -155,13 +155,18 @@ class TestRegion(unittest.TestCase):
         # print(chunk.Level.Entities.export())
         # print(chunk.Level.export(scope=['xPos', 'zPos']))
 
-    def test_chunk_iterator(self):
-        region = Region.open("test/data/region-r.0.0.mca")
-        with region.chunk(1,2) as chunk:
-          # print(chunk)
-          # print(chunk.Level.Entities.export())
-          # print(chunk.Level.export(scope=['xPos', 'zPos']))
-          pass
+    def test_chunk_contextmanager(self):
+        region = Region(REGION(10*PAGE_SIZE,
+          CHUNK(1,2,pageaddr=3,data=CHUNK_DATA(
+            COMPOUND_FRAME(
+              INT_FRAME(123, "data")
+            )
+          )),
+        ))
+        with region.chunk(1,2).parse() as nbt:
+            nbt.data = 12
+
+        self.assertEqual(region.parse_chunk(1,2).data, 12)
 
     def test_write_chunk(self):
         region = Region()

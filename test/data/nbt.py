@@ -2,7 +2,8 @@
 # ==================================================================== 
 # Useful macros & constants
 # ====================================================================
-NAME=lambda s: (len(s).to_bytes(2, 'big') + s.encode('utf8')).hex()
+UTF8=lambda s : s.encode('utf8').hex()
+NAME=lambda s: (lambda s : ((len(s)//2).to_bytes(2, 'big').hex() + s))(UTF8(s))
 STRING=NAME
 
 END = lambda : "00"
@@ -41,6 +42,9 @@ class FRAME:
       self.BYTES = bytes.fromhex(self.HEX)
 
   def __str__(self):
+      return self.HEX
+
+  def hex(self):
       return self.HEX
 
 """ Small helper to avoid passing the frame name as a named parmeter
