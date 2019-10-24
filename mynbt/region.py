@@ -76,20 +76,6 @@ def chunk_to_index(x, z):
     assert_in_range(z, 0, 32)
     return 32*z+x
 
-class ChunkContextManager:
-    def __init__(self, region, x, z):
-        self._region = region
-        self._x = x
-        self._z = z
-
-    def __enter__(self):
-        self._nbt = self._region.parse_chunk(self._x, self._z)
-        return self._nbt
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        if exc_type is None:
-            self._region.set_chunk(self._x, self._z, self._nbt)
-
 EmptyPage = bytes(PAGE_SIZE)
 from collections import namedtuple
 ChunkInfo = namedtuple('ChunkInfo', ['addr', 'size', 'timestamp', 'x', 'z', 'data'])
