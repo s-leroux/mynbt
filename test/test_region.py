@@ -76,6 +76,34 @@ class TestRegion(unittest.TestCase):
 
             self.assertEqual(len(w), 1)
 
+    def test_7(self):
+        """ Region can return raw chunk data
+        """
+        data=b"some random data"
+        region = Region(REGION(5*1024*1024,
+          CHUNK(3,4,pageaddr=5,pagecount=2,data=data),
+        ))
+
+        content = region.get_chunk(3,4)
+        self.assertTrue(bytes(content).startswith(data))
+        self.assertTrue(len(content)%PAGE_SIZE == 0)
+
+    def test_8(self):
+        """ Region can copy raw chunk data
+        """
+        data=b"some random data"
+        region = Region(REGION(5*1024*1024,
+          CHUNK(3,4,pageaddr=5,pagecount=2,data=data),
+        ))
+
+        region.copy_chunk(3,4,5,6)
+        content = region.get_chunk(3,4)
+        self.assertTrue(bytes(content).startswith(data))
+        self.assertTrue(len(content)%PAGE_SIZE == 0)
+        content = region.get_chunk(5,6)
+        self.assertTrue(bytes(content).startswith(data))
+        self.assertTrue(len(content)%PAGE_SIZE == 0)
+
     def test_bytes_to_chunk_addr(self):
         addr = bytes_to_chunk_addr(bytes.fromhex("102030405060"), 0)
         self.assertEqual(addr, (0x102030, 0x40))
@@ -91,9 +119,9 @@ class TestRegion(unittest.TestCase):
 
         self.assertEqual(region.chunk_info(1,2), (0, 0, 0, 0, 0, b""))
 
-    def test_set_chunk(self):
+    def test_write_chunk(self):
         region = Region()
-        region.set_chunk(1,2, nbt.Integer(3))
+        region.write_chunk(1,2, nbt.Integer(3))
         chunk = region.chunk_info(1,2)
         self.assertEqual((chunk.x,chunk.z), (1, 2))
         self.assertGreater(len(chunk.data), 0)
@@ -137,7 +165,7 @@ class TestRegion(unittest.TestCase):
 
     def test_write_chunk(self):
         region = Region()
-        region.set_chunk(1,2, nbt.Integer(3))
+        region.write_chunk(1,2, nbt.Integer(3))
 
 
         stream = BytesIO()

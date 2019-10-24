@@ -211,7 +211,7 @@ class Region:
       nbt, *_ = TAG.parse(data,0)
       return nbt
 
-    def set_chunk(self, x, z, nbt, *, compression=ZLIB):
+    def write_chunk(self, x, z, nbt, *, compression=ZLIB):
         self.invalidate()
 
         assert_in_range(x, 0, 32, 'x')
@@ -233,10 +233,31 @@ class Region:
         idx = z*32+x
         self._chunks[idx] = ChunkInfo(addr, size, timestamp, x, z, dump)
 
+    def get_chunk(self, x, z):
+        """ Return the chunk raw data
+        """
+        return self.chunk_info(x,z).data
+
+    def set_chunk(self, x, z, data, timestamp=None):
+        """ Set chunk raw data.
+            No validation is performed to check if
+            the data are valid.
+        """
+        self.invalidate()
+        timestamp = timestamp or int(time())
+
+        idx = chunk_to_index(x,z)
+        self._chunks[idx] = ChunkInfo(-1, -1, timestamp, x, z, data)
+
     def kill_chunk(self, x, z):
         """ Remove a chunk
         """
         self.set_chunk_info(x,z,EMPTY_CHUNK)
+
+    def copy_chunk(self, from_x, from_z, to_x, to_z):
+        """ Shorthand for set_chunk(...,get_chunk(...))
+        """
+        self.set_chunk(to_x, to_z, self.get_chunk(from_x, from_z))
 
     def chunk(self, x, z):
       """ Return a context manager to modify and update a chunk from the region
