@@ -10,6 +10,7 @@
 from mmap import mmap, PROT_READ
 from time import time
 from struct import unpack
+from array import array
 import zlib
 import gzip
 import io
@@ -64,7 +65,16 @@ ChunkInfo = namedtuple('ChunkInfo', ['addr', 'size', 'timestamp', 'x', 'z', 'dat
 EmptyChunk = ChunkInfo(0,0,0,0,0,memoryview(EmptyPage[0:0]))
 
 class Region:
-    def __init__(self, data=bytes(2*PAGE_SIZE)):
+    def __init__(self, data=b""):
+      self._bitmap = None
+
+      # ensure the region file contains at least the 2-page header
+      if len(data) < 2*PAGE_SIZE:
+          data = (data + bytes(2*PAGE_SIZE))[:2*PAGE_SIZE]
+
+      # This is the _logical_ page count. Not necessary the _physical_ page count
+      self._pagecount = 2
+
       view = memoryview(data)
       locations=view[0:PAGE_SIZE].cast('i')
       timestamps=view[PAGE_SIZE:2*PAGE_SIZE].cast('i')
@@ -76,7 +86,29 @@ class Region:
         if location != 0:
             timestamp = int.from_bytes(timestamps[i:][:1], 'big')
             addr, size = location>>8,location&0xFF # Addr and size in 4KiB pages
-            self._chunks[i] = ChunkInfo(addr, size, timestamp, *divmod(i,32), view[addr*PAGE_SIZE:][:size*PAGE_SIZE])
+            data = view[addr*PAGE_SIZE:][:size*PAGE_SIZE]
+
+            # Deal with missing data
+            missing_data = size*PAGE_SIZE - len(data)
+            if missing_data:
+                data = bytes(data) + bytes(missing_data)
+
+            self._pagecount = max(self._pagecount, addr+size)
+
+            self._chunks[i] = ChunkInfo(addr, size, timestamp, *divmod(i,32), data)
+
+    def bitmap(self):
+        if self._bitmap is None:
+            bitmap = array('H', (0,))*self._pagecount
+            for chunk in self._chunks:
+                for n in range(chunk.addr, chunk.addr+chunk.size):
+                    print(n, self._pagecount)
+                    bitmap[n] += 1
+
+            self._bitmap = bitmap
+
+
+        return self._bitmap
 
     def chunk_info(self, x, z):
       idx = z*32+x

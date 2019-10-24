@@ -5,6 +5,37 @@ from mynbt.region import *
 import mynbt.nbt as nbt
 
 class TestRegion(unittest.TestCase):
+    def test_1(self):
+        """ Region without data should have all chunks empty
+        """
+        region = Region()
+        chunks = [region.chunk_info(x,y) for x in range(32) for y in range(32)]
+        self.assertSequenceEqual(chunks, [EmptyChunk]*32*32)
+
+    def test_2(self):
+        """ Region with incomplete headers should be silently fixed
+        """
+        region = Region(b"\x00"*(PAGE_SIZE//2))
+        chunks = [region.chunk_info(x,y) for x in range(32) for y in range(32)]
+        self.assertSequenceEqual(chunks, [EmptyChunk]*32*32)
+
+    def test_3(self):
+        """ Missing data are filled with zero bytes
+        """
+        addr, size = 5, 3
+        broken_header = (5<<8|3)
+        region = Region(broken_header.to_bytes(4, 'big'))
+        chunk = region.chunk_info(0,0)
+        self.assertEqual([chunk.addr,chunk.size], [addr, size])
+        self.assertEqual(chunk.data, EmptyPage*size)
+
+    def test_4(self):
+        """ Region should compute page usage bitmap
+        """
+        region = Region.open("test/data/region-r.0.0.mca")
+        print(region.bitmap())
+
+
     def test_bytes_to_chunk_addr(self):
         addr = bytes_to_chunk_addr(bytes.fromhex("102030405060"), 0)
         self.assertEqual(addr, (0x102030, 0x40))
