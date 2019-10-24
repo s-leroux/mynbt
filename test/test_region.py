@@ -13,14 +13,14 @@ class TestRegion(unittest.TestCase):
         """
         region = Region()
         chunks = [region.chunk_info(x,y) for x in range(32) for y in range(32)]
-        self.assertSequenceEqual(chunks, [EmptyChunk]*32*32)
+        self.assertSequenceEqual(chunks, [EMPTY_CHUNK]*32*32)
 
     def test_2(self):
         """ Region with incomplete headers should be silently fixed
         """
         region = Region(b"\x00"*(PAGE_SIZE//2))
         chunks = [region.chunk_info(x,y) for x in range(32) for y in range(32)]
-        self.assertSequenceEqual(chunks, [EmptyChunk]*32*32)
+        self.assertSequenceEqual(chunks, [EMPTY_CHUNK]*32*32)
 
     def test_3(self):
         """ Missing data are filled with zero bytes
@@ -61,7 +61,6 @@ class TestRegion(unittest.TestCase):
 
             self.assertEqual(len(w), 1)
 
-
     def test_6(self):
         """ Region should warn about odd chunk data location
         """
@@ -98,6 +97,19 @@ class TestRegion(unittest.TestCase):
         chunk = region.chunk_info(1,2)
         self.assertEqual((chunk.x,chunk.z), (1, 2))
         self.assertGreater(len(chunk.data), 0)
+
+    def test_kill_chunk(self):
+        region = Region(REGION(10*PAGE_SIZE,
+          CHUNK(1,2,pageaddr=3,data=CHUNK_DATA(
+            SHORT_FRAME(123).BYTES
+          )),
+          CHUNK(2,1,pageaddr=5,data=CHUNK_DATA(
+            SHORT_FRAME(456).BYTES
+          )),
+        ))
+        self.assertEqual(region.bitmap(), [(), (), (), ((1,2),), (), ((2, 1),)])
+        region.kill_chunk(1,2)
+        self.assertEqual(region.bitmap(), [(), (), (), (), (), ((2, 1),)])
 
     def test_parse_chunk(self):
         region = Region(REGION(10*PAGE_SIZE,

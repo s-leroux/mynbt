@@ -71,6 +71,11 @@ def bytes_to_chunk_addr(base, offset):
       base[offset+3]
       )
 
+def chunk_to_index(x, z):
+    assert_in_range(x, 0, 32)
+    assert_in_range(z, 0, 32)
+    return 32*z+x
+
 class ChunkContextManager:
     def __init__(self, region, x, z):
         self._region = region
@@ -88,7 +93,7 @@ class ChunkContextManager:
 EmptyPage = bytes(PAGE_SIZE)
 from collections import namedtuple
 ChunkInfo = namedtuple('ChunkInfo', ['addr', 'size', 'timestamp', 'x', 'z', 'data'])
-EmptyChunk = ChunkInfo(0,0,0,0,0,memoryview(EmptyPage[0:0]))
+EMPTY_CHUNK = ChunkInfo(0,0,0,0,0,memoryview(EmptyPage[0:0]))
 
 # ==================================================================== 
 # Region
@@ -109,7 +114,7 @@ class Region:
       locations=view[0:PAGE_SIZE].cast('i')
       timestamps=view[PAGE_SIZE:2*PAGE_SIZE].cast('i')
 
-      self._chunks = [EmptyChunk]*1024
+      self._chunks = [EMPTY_CHUNK]*1024
 
       for i in range(1024):
         z, x = divmod(i, 32)
@@ -185,8 +190,13 @@ class Region:
         return self._bitmap
 
     def chunk_info(self, x, z):
-      idx = z*32+x
-      return self._chunks[idx]
+        idx = chunk_to_index(x,z)
+        return self._chunks[idx]
+
+    def set_chunk_info(self, x, z, info):
+        self.invalidate()
+        idx = chunk_to_index(x,z)
+        self._chunks[idx] = info
 
     #------------------------------------
     # Chunk management
@@ -222,6 +232,11 @@ class Region:
 
         idx = z*32+x
         self._chunks[idx] = ChunkInfo(addr, size, timestamp, x, z, dump)
+
+    def kill_chunk(self, x, z):
+        """ Remove a chunk
+        """
+        self.set_chunk_info(x,z,EMPTY_CHUNK)
 
     def chunk(self, x, z):
       """ Return a context manager to modify and update a chunk from the region
