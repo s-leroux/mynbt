@@ -76,6 +76,7 @@ class Node:
         a value node
     """
     def __init__(self, *, trait, payload=None, parent = None):
+        self._version = 0
         self._trait = trait
         self._payload = payload
         self._parents = WeakSet()
@@ -94,13 +95,20 @@ class Node:
             self.register_parent(parent)
         return self
 
+    G_VERSION=0
     def invalidate(self):
+        Node.G_VERSION+=1
+        version = Node.G_VERSION
+
         queue = [self]
         while queue:
           item = queue.pop()
-          if item._payload:
+          if item._version < version:
+            item._version = version
             item._payload = None
             queue.extend(item._parents)
+          else:
+            assert item._payload is None
 
     #------------------------------------
     # NBT tree traversal

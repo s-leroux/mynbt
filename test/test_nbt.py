@@ -443,3 +443,37 @@ class TestWrite(unittest.TestCase):
         self.assertIn(b'\x02\x00\x09shortTest\x7F\xFF', bytes(output.getbuffer()))
         self.assertIn(b'\x02\x00\x0AotherShort\x7F\xFF', bytes(output.getbuffer()))
 
+class Versioning(unittest.TestCase):
+    def test_verion(self):
+        """ After parsing, nodes should be at version 0
+        """
+        with gzip.open("test/data/level.dat", "rb") as f:
+          data = f.read()
+          t, _, offset = TAG.parse(data, 0)
+
+        self.assertEqual(t._version, 0)
+
+    def test_version_update(self):
+        """ Nested elements shoud track their parent as weak links
+        """
+        t, *_ = TAG.parse(COMPOUND_FRAME(
+            WITH_NAME("Data", COMPOUND_FRAME)(
+              SHORT_FRAME(123, "a"),
+              INT_FRAME(456, "b"),
+            )
+        ).BYTES)
+
+        self.assertEqual(t._version, 0)
+
+        del t.Data.b
+        v1 = t._version
+        self.assertGreater(v1, 0)
+
+        t.Data.a=789
+        v2 = t._version
+        self.assertGreater(v2, v1)
+
+        t.Data.c=0
+        v3 = t._version
+        self.assertGreater(v3, v2)
+
