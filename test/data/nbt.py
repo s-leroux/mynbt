@@ -36,16 +36,13 @@ LONG_ARRAY = lambda : ""
     LONG_ARRAY.ID,
   ) = ("{:02x}".format(n) for n in range(13))
 
-class FRAME:
+class FRAME(bytearray):
   def __init__(self, *content):
       self.HEX = " ".join(str(c) for c in content)
-      self.BYTES = bytes.fromhex(self.HEX)
+      self[:] = self.BYTES = bytes.fromhex(self.HEX)
 
   def __str__(self):
-      return self.HEX
-
-  def hex(self):
-      return self.HEX
+      return self.hex()
 
 """ Small helper to avoid passing the frame name as a named parmeter
     after the value(s) which ws somewhat counter-intuitive

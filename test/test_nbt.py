@@ -461,7 +461,7 @@ class Versioning(unittest.TestCase):
               SHORT_FRAME(123, "a"),
               INT_FRAME(456, "b"),
             )
-        ).BYTES)
+        ))
 
         self.assertEqual(t._version, 0)
 
