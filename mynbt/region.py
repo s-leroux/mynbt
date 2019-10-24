@@ -99,11 +99,11 @@ class Region:
 
     def bitmap(self):
         if self._bitmap is None:
-            bitmap = array('H', (0,))*self._pagecount
+            bitmap = [()]*self._pagecount
             for chunk in self._chunks:
                 for n in range(chunk.addr, chunk.addr+chunk.size):
                     print(n, self._pagecount)
-                    bitmap[n] += 1
+                    bitmap[n] = (*bitmap[n], (chunk.x,chunk.z))
 
             self._bitmap = bitmap
 
