@@ -25,11 +25,11 @@ def CHUNK_DATA(data, *, length=None, compression=0):
     if length is None:
         length = len(data)
 
-    return b"".join(
+    return b"".join((
       length.to_bytes(4, 'big'),
-      compression.to_byte(1, 'big'),
+      compression.to_bytes(1, 'big'),
       data,
-    )
+    ))
 
 def REGION(size_in_bytes, *chunks):
     region = bytearray(size_in_bytes)

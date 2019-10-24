@@ -35,6 +35,7 @@ COMPRESSOR = {
   ZLIB: zlib.compress,
 }
 DECOMPRESSOR = {
+  NONE: lambda data : data,
   GLIB: gzip.decompress,
   ZLIB: zlib.decompress,
 }
@@ -45,14 +46,12 @@ class RegionWarning(UserWarning):
     def __init__(self, message, **kwargs):
         super().__init__(message.format(**kwargs))
 
-    def send(self):
-        warn(self)
-
 class OddChunkLocation(RegionWarning):
     pass
 
 class ChunkDataInHeader(OddChunkLocation):
     def __init__(self, x, z, **kwargs):
+        self._chunk = (x,z)
         super().__init__("Data for chunk {x},{z} in header", x=x,z=z)
 
 class DuplicatePage(OddChunkLocation):
@@ -91,9 +90,13 @@ from collections import namedtuple
 ChunkInfo = namedtuple('ChunkInfo', ['addr', 'size', 'timestamp', 'x', 'z', 'data'])
 EmptyChunk = ChunkInfo(0,0,0,0,0,memoryview(EmptyPage[0:0]))
 
+# ==================================================================== 
+# Region
+# ==================================================================== 
 class Region:
     def __init__(self, data=b""):
       self._bitmap = None
+      self._issues = []
 
       # ensure the region file contains at least the 2-page header
       if len(data) < 2*PAGE_SIZE:
@@ -116,7 +119,7 @@ class Region:
             addr, size = location>>8,location&0xFF # Addr and size in 4KiB pages
 
             if addr < 2:
-                ChunkDataInHeader(x,z).send()
+                self.track(ChunkDataInHeader(x,z))
 
             data = view[addr*PAGE_SIZE:][:size*PAGE_SIZE]
 
@@ -134,16 +137,47 @@ class Region:
         """
         self._bitmap = None
 
+    #------------------------------------
+    # Issue management
+    #------------------------------------
+    def check(self):
+        """ Run all diagnosis function
+        """
+        bitmap()
+
+    def track(self, issue):
+        """ Track an issue
+        """
+        self._issues.append(issue)
+        warn(issue)
+
+    def fix(self):
+        """ (Try to) fix all tracked issues
+        """
+        # XXX Issue fixing might be implemented using a modified
+        #     visitor pattern in an itertion loop so each chunk
+        #     is touched only once before rechecking for issues
+
+        raise NotImplementedError
+
+    #------------------------------------
+    # Low level region access
+    #------------------------------------
     def bitmap(self):
         """ Compute the file's page usage bitmap.
         """
+        duplicate_pages = {}
+
         if self._bitmap is None:
             bitmap = [()]*self._pagecount
             for chunk in self._chunks:
                 for n in range(chunk.addr, chunk.addr+chunk.size):
                     owners = bitmap[n] = (*bitmap[n], (chunk.x,chunk.z))
                     if len(owners) > 1:
-                        DuplicatePage(n, owners).send()
+                        duplicate_pages[n] = owners
+
+            for n, chunks in duplicate_pages.items():
+                self.track(DuplicatePage(n, chunks))
 
             self._bitmap = bitmap
 
@@ -154,17 +188,20 @@ class Region:
       idx = z*32+x
       return self._chunks[idx]
 
+    #------------------------------------
+    # Chunk management
+    #------------------------------------
     def parse_chunk(self, x, z):
       *_, mem = self.chunk_info(x,z)
       if mem is None:
         return None
 
-      compression = mem[4:5]
+      compression = bytes(mem[4:5])
       data = DECOMPRESSOR[compression](mem[5:])
       nbt, *_ = TAG.parse(data,0)
       return nbt
 
-    def set_chunk(self, x, z, chunk, *, compression=ZLIB):
+    def set_chunk(self, x, z, nbt, *, compression=ZLIB):
         self.invalidate()
 
         assert_in_range(x, 0, 32, 'x')
@@ -173,7 +210,7 @@ class Region:
         chunk_info = self.chunk_info(x,z)
         
         data = io.BytesIO()
-        chunk.write_to(data)
+        nbt.write_to(data)
         dump = data.getbuffer()
         dump = COMPRESSOR[compression](dump)
 
@@ -191,6 +228,9 @@ class Region:
       """
       return ChunkContextManager(self, x, z);
 
+    #------------------------------------
+    # I/O
+    #------------------------------------
     def write_to(self, output, *, filter=lambda x,y:True):
         """ Write the current region file to the given output
             Output should support the 'write' operations

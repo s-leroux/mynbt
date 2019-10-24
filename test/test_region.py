@@ -4,6 +4,7 @@ import warnings
 from io import BytesIO
 from mynbt.region import *
 from test.data.region import *
+from test.data.nbt import *
 import mynbt.nbt as nbt
 
 class TestRegion(unittest.TestCase):
@@ -97,6 +98,15 @@ class TestRegion(unittest.TestCase):
         chunk = region.chunk_info(1,2)
         self.assertEqual((chunk.x,chunk.z), (1, 2))
         self.assertGreater(len(chunk.data), 0)
+
+    def test_parse_chunk(self):
+        region = Region(REGION(10*PAGE_SIZE,
+          CHUNK(1,2,pageaddr=4,pagecount=2,data=CHUNK_DATA(
+            SHORT_FRAME(123).BYTES
+          )),
+        ))
+        nbt = region.parse_chunk(1,2)
+        self.assertEqual(nbt, 123)
 
     def test_region(self):
         region = Region.open("test/data/region-r.0.0.mca")
