@@ -113,6 +113,7 @@ class Chunk:
         """
         chunk = self
         nbt = self._region.parse_chunk(self._x, self._z)
+        old_version = nbt._version
         class ContextManager:
             def __getattr__(self, name):
                 return getattr(nbt, name)
@@ -127,7 +128,7 @@ class Chunk:
                 return self
 
             def __exit__(self, exc_type, *args):
-                if exc_type is None:
+                if exc_type is None and nbt._version > old_version:
                     chunk.write(nbt)
 
         return ContextManager()
