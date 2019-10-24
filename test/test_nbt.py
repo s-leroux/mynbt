@@ -1,7 +1,7 @@
 import unittest
 
 from mynbt.nbt import *
-from test.data.samples import *
+from test.data.nbt import *
 
 class TestNodeComparisons(unittest.TestCase):
     def test_1(self):

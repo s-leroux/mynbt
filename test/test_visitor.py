@@ -2,7 +2,7 @@ import unittest
 
 import mynbt.nbt as nbt
 from mynbt.visitor import *
-from test.data.samples import *
+from test.data.nbt import *
 
 class TestSmartVisitor(unittest.TestCase):
     def test_1(self):

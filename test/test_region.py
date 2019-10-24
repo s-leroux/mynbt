@@ -1,7 +1,9 @@
 import unittest
+import warnings
 
 from io import BytesIO
 from mynbt.region import *
+from test.data.region import *
 import mynbt.nbt as nbt
 
 class TestRegion(unittest.TestCase):
@@ -30,11 +32,49 @@ class TestRegion(unittest.TestCase):
         self.assertEqual(chunk.data, EmptyPage*size)
 
     def test_4(self):
-        """ Region should compute page usage bitmap
+        """ Region should compute logical page usage bitmap
         """
-        region = Region.open("test/data/region-r.0.0.mca")
-        print(region.bitmap())
+        region = Region(REGION(5*1024*1024,
+          CHUNK(3,4,pageaddr=5,pagecount=2,data=b"some data"),
+        ))
 
+        bitmap = region.bitmap()
+        self.assertSequenceEqual(bitmap, ((),(),(),(),(), ((3,4),), ((3,4),)))
+        #                                  0  1  2  3  4   5        6
+
+    def test_5(self):
+        """ Region bitmap should trace overlapping chunks
+        """
+        region = Region(REGION(5*1024*1024,
+          CHUNK(0,1,pageaddr=4,pagecount=2,data=b"some data"),
+          CHUNK(3,4,pageaddr=5,pagecount=2,data=b"other data"),
+        ))
+
+        with warnings.catch_warnings(record=True) as w:
+            # Cause all warnings to always be triggered.
+            warnings.simplefilter("always")
+
+            bitmap = region.bitmap()
+            self.assertSequenceEqual(bitmap, ((),(),(),(),((0,1),), ((0,1),(3,4),), ((3,4),)))
+            #                                  0  1  2  3  4         5                6
+
+            self.assertEqual(len(w), 1)
+
+
+    def test_6(self):
+        """ Region should warn about odd chunk data location
+        """
+
+        with warnings.catch_warnings(record=True) as w:
+            # Cause all warnings to always be triggered.
+            warnings.simplefilter("always")
+
+            region = Region(REGION(5*1024*1024,
+              # at page 1, date are in the region header
+              CHUNK(3,4,pageaddr=1,pagecount=2,data=b"some data"),
+            ))
+
+            self.assertEqual(len(w), 1)
 
     def test_bytes_to_chunk_addr(self):
         addr = bytes_to_chunk_addr(bytes.fromhex("102030405060"), 0)

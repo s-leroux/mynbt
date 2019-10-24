@@ -11,6 +11,7 @@ from mmap import mmap, PROT_READ
 from time import time
 from struct import unpack
 from array import array
+from warnings import warn
 import zlib
 import gzip
 import io
@@ -21,9 +22,15 @@ PAGE_SIZE=4096
 """ Page-size (in bytes) in the region file
 """
 
+#
+# XXX Avoid module's global namespace polution by defining the
+#     following constents in their own namespace (or in the Region class?)
+#
+NONE=b"\x00" # not found in official MC files
 GLIB=b"\x01"
 ZLIB=b"\x02"
 COMPRESSOR = {
+  NONE: lambda data : data,
   GLIB: gzip.compress,
   ZLIB: zlib.compress,
 }
@@ -31,6 +38,26 @@ DECOMPRESSOR = {
   GLIB: gzip.decompress,
   ZLIB: zlib.decompress,
 }
+
+class RegionWarning(UserWarning):
+    """ Base class for ll warnings issued by the Region class
+    """
+    def __init__(self, message, **kwargs):
+        super().__init__(message.format(**kwargs))
+
+    def send(self):
+        warn(self)
+
+class OddChunkLocation(RegionWarning):
+    pass
+
+class ChunkDataInHeader(OddChunkLocation):
+    def __init__(self, x, z, **kwargs):
+        super().__init__("Data for chunk {x},{z} in header", x=x,z=z)
+
+class DuplicatePage(OddChunkLocation):
+    def __init__(self, page, chunks, **kwargs):
+        super().__init__("Page {page} is used by multiple chunks: {chunks}", page=page, chunks=chunks)
 
 def assert_in_range(x, start, end, msg="value"):
     if start <= x < end:
@@ -82,10 +109,15 @@ class Region:
       self._chunks = [EmptyChunk]*1024
 
       for i in range(1024):
+        z, x = divmod(i, 32)
         location = int.from_bytes(locations[i:][:1], 'big')
         if location != 0:
             timestamp = int.from_bytes(timestamps[i:][:1], 'big')
             addr, size = location>>8,location&0xFF # Addr and size in 4KiB pages
+
+            if addr < 2:
+                ChunkDataInHeader(x,z).send()
+
             data = view[addr*PAGE_SIZE:][:size*PAGE_SIZE]
 
             # Deal with missing data
@@ -94,16 +126,24 @@ class Region:
                 data = bytes(data) + bytes(missing_data)
 
             self._pagecount = max(self._pagecount, addr+size)
+            
+            self._chunks[i] = ChunkInfo(addr, size, timestamp, x, z, data)
 
-            self._chunks[i] = ChunkInfo(addr, size, timestamp, *divmod(i,32), data)
+    def invalidate(self):
+        """ Invalidate cached data.
+        """
+        self._bitmap = None
 
     def bitmap(self):
+        """ Compute the file's page usage bitmap.
+        """
         if self._bitmap is None:
             bitmap = [()]*self._pagecount
             for chunk in self._chunks:
                 for n in range(chunk.addr, chunk.addr+chunk.size):
-                    print(n, self._pagecount)
-                    bitmap[n] = (*bitmap[n], (chunk.x,chunk.z))
+                    owners = bitmap[n] = (*bitmap[n], (chunk.x,chunk.z))
+                    if len(owners) > 1:
+                        DuplicatePage(n, owners).send()
 
             self._bitmap = bitmap
 
@@ -125,6 +165,8 @@ class Region:
       return nbt
 
     def set_chunk(self, x, z, chunk, *, compression=ZLIB):
+        self.invalidate()
+
         assert_in_range(x, 0, 32, 'x')
         assert_in_range(z, 0, 32, 'z')
 
