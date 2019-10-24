@@ -563,7 +563,8 @@ class ListReader(Reader):
         items = []
         while count > 0:
           item, offset = trait.make_from_payload(base, offset, parent=container)
-          container.append(item)
+          container._items.append(item) # direct access to the storage to bypass invalidate()
+
           count -= 1
         
         container._payload = base[start:offset]
@@ -578,7 +579,7 @@ class CompoundReader(Reader):
           item, name, offset = TAG.parse(base, offset, parent=container)
           if type(item) is End:
             break
-          container[name] = item
+          container._items[name] = item # direct access to the storage to bypass invalidate()
           
         container._payload = base[start:offset]
         return container, offset
