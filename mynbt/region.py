@@ -61,23 +61,30 @@ class RegionError(MyNBTError):
     pass
 
 class BadChunkError(RegionError):
-    def __init__(self, region, x, z, data, msg="", **kwargs):
-        self._chunk = (x,z)
+    def __init__(self, region, chunk_info, msg="", **kwargs):
+        self._chunk = chunk_info
         super().__init__(
             "Header for chunk {x},{z} in {region} does not seem valid:\n{msg}\n{dump}",
-            x=x,z=z,region=region,msg=msg,
-            dump="\n".join(itertools.islice(hexdump(data), 10))
+            x=chunk_info.x, z=chunk_info.z,
+            region=region,msg=msg,
+            dump="\n".join(itertools.islice(hexdump(chunk_info.data), 10))
         )
 
 class UnknownCompressionError(BadChunkError):
-    def __init__(self, region, x, z, data, **kwargs):
-        self._chunk = (x,z)
-        super().__init__(x=x,z=z,region=region,data=data,msg="Unknown compression code {code}".format(code=data[4:5].hex()))
+    def __init__(self, region, chunk_info, **kwargs):
+        super().__init__(
+            chunk_info=chunk_info,
+            region=region,
+            msg="Unknown compression code {code}".format(code=data[4:5].hex())
+        )
 
 class MissingDataError(BadChunkError):
-    def __init__(self, region, x, z, data, **kwargs):
-        self._chunk = (x,z)
-        super().__init__(x=x,z=z,region=region,data=data,msg="Chunck logical size greater than its physical size")
+    def __init__(self, region, chunk_info, **kwargs):
+        super().__init__(
+            chunk_info=chunk_info,
+            region=region,
+            msg="Chunck logical size greater than its physical size"
+        )
 
 # ====================================================================
 # Warnings
@@ -87,23 +94,40 @@ class RegionWarning(MyNBTWarning):
     """
     pass
 
-class OddChunkLocation(RegionWarning):
-    pass
+class BadChunk(RegionWarning):
+    def __init__(self, chunk_info, msg, **kwargs):
+        self._chunk = chunk_info
+        super().__init__(msg, **kwargs)
 
-class ChunkDataInHeader(OddChunkLocation):
-    def __init__(self, x, z, **kwargs):
-        self._chunk = (x,z)
-        super().__init__("Data for chunk {x},{z} in header", x=x,z=z)
+class ChunkDataInHeader(BadChunk):
+    def __init__(self, chunk_info, **kwargs):
+        super().__init__(
+            chunk_info,
+            "Data for chunk {x},{z} in header",
+            x=chunk_info.x,z=chunk_info.z
+        )
 
-class DuplicatePage(OddChunkLocation):
-    def __init__(self, region, page, chunks, **kwargs):
-        super().__init__("Page {page} of {region} is used by multiple chunks: {chunks}", region=region, page=page, chunks=chunks)
-
-class InconsistentLocation(RegionWarning):
-    def __init__(self, region, nbt, ploc, lloc, **kwargs):
+class InconsistentLocation(BadChunk):
+    def __init__(self, region, nbt, chunk_info, lloc, **kwargs):
         self._nbt = nbt
-        super().__init__("Chunk {ploc} shouldn't contain data for chunk {lloc}", ploc=ploc, lloc=lloc, region=region)
+        ploc = (chunk_info.x, chunk_info.z)
+        super().__init__(
+            chunk_info,
+            "Chunk {ploc} shouldn't contain data for chunk {lloc}",
+            ploc=ploc,
+            lloc=lloc,
+            region=region
+        )
 
+
+class DuplicatePage(RegionWarning):
+    def __init__(self, region, page, chunks, **kwargs):
+        super().__init__(
+            "Page {page} of {region} is used by multiple chunks: {chunks}",
+            region=region,
+            page=page,
+            chunks=chunks
+        )
 
 # ====================================================================
 # Utilities
@@ -208,9 +232,6 @@ class Region:
             timestamp = int.from_bytes(timestamps[i:][:1], 'big')
             addr, size = location>>8,location&0xFF # Addr and size in 4KiB pages
 
-            if addr < 2:
-                self.track(ChunkDataInHeader(x,z))
-
             data = view[addr*PAGE_SIZE:][:size*PAGE_SIZE]
 
             # Deal with missing data
@@ -221,6 +242,9 @@ class Region:
             self._pagecount = max(self._pagecount, addr+size)
 
             self._chunks[i] = ChunkInfo(addr, size, timestamp, x, z, data)
+
+            if addr < 2:
+                self.track(ChunkDataInHeader(self._chunks[i]))
 
     def __str__(self):
         return self._name
@@ -242,6 +266,7 @@ class Region:
         """ Track an issue
         """
         self._issues.append(issue)
+        # print(issue)
         warn(issue, stacklevel=2)
 
     def fix(self):
@@ -290,7 +315,7 @@ class Region:
     # Chunk management
     #------------------------------------
     def parse_chunk(self, x, z):
-      *_, mem = self.chunk_info(x,z)
+      *_, mem = chunk_info = self.chunk_info(x,z)
       if mem is None:
         return None
 
@@ -299,20 +324,20 @@ class Region:
           return None
 
       if length > len(mem)-5:
-          raise MissingDataError(self, x, z, mem) from None
+          raise MissingDataError(self, chunk_info) from None
 
       compression = bytes(mem[4:5])
       try:
           data = DECOMPRESSOR[compression](mem[5:5+length])
       except KeyError:
-          raise UnknownCompressionError(self, x, z, mem) from None
+          raise UnknownCompressionError(self, chunk_info) from None
       nbt, *_ = TAG.parse(data)
 
       try:
           lx = nbt.Level.xPos
           lz = nbt.Level.zPos
           if (x,z) != (lx%32,lz%32):
-            self.track(InconsistentLocation(self, nbt, (x,z), (lx,lz)))
+            self.track(InconsistentLocation(self, nbt, chunk_info, (lx,lz)))
 
       except (AttributeError, KeyError):
           pass
