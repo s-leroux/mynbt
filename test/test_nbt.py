@@ -409,12 +409,18 @@ class TestCycleDetection(unittest.TestCase):
         self.assertTrue(self.d21.has_ancestor(self.root))
 
     def test_4(self):
-        """ Ancestor detection should work on DAG`
+        """ Ancestor detection should work on DAG
         """
         self.d11 = self.d1.d11 = self.d21
         self.assertIs(self.d11, self.d21)
         self.assertTrue(self.d11.has_ancestor(self.d2))
         self.assertTrue(self.d11.has_ancestor(self.d1))
+
+    def test_5(self):
+        """ Cycle detection should raise an exception
+        """
+        with self.assertRaises(CircularReferenceError):
+            self.d21.d211 = self.root
 
 class TestSetValue(unittest.TestCase):
     def test_set_value_compound(self):

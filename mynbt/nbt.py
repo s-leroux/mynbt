@@ -7,6 +7,10 @@ import io
 
 from mynbt.visitor import Visitor, Exporter
 
+class CircularReferenceError(Exception):
+    def __init__(self):
+        super().__init__("Circular reference detected")
+
 class TAG:
     @staticmethod
     def parse_id(base, offset):
@@ -47,7 +51,7 @@ class TAG:
           gzip.open,
           open,
         )
-        
+
         err = None
         for reader in readers:
           try:
@@ -64,14 +68,14 @@ class TAG:
         assert data[offset:] == b""
         return result
 
-# ==================================================================== 
+# ====================================================================
 # Value types
-# ==================================================================== 
+# ====================================================================
 class Node:
     """ Base class for NBT node elements.
         When parsing NBT data, node are mostly proxy containing
         the raw undecoded bytes for the node.
-        
+
         When the value of a proxy node is accessed, it instanciates
         a value node
     """
@@ -88,6 +92,10 @@ class Node:
     #------------------------------------
     def register_parent(self,parent):
         assert isinstance(parent, Node), "Parent must be  valid NBT node " + str(type(parent))
+        # Only composite nodes can induce circular references
+        # if parent.has_ancestor(self):
+        #     raise "Circular reference detected"
+
         self._parents.add(parent)
 
     def register_parents(self,parents):
@@ -178,7 +186,7 @@ class Node:
                 return (path, name, node)
 
         return self.visit(V(), rootname=rootname,filter=filter)
-    
+
     #------------------------------------
     # Exporting NBT values
     #------------------------------------
@@ -216,9 +224,9 @@ class Node:
     def value(self):
         return self
 
-# ==================================================================== 
+# ====================================================================
 # Value types
-# ==================================================================== 
+# ====================================================================
 class End(Node):
     def __init__(self, *, parent):
       super().__init__(trait=EndTrait, parent=parent)
@@ -232,11 +240,11 @@ class Value(Node):
 
     def pack(self):
         """ Pack the value to a proper byte payload
-            
+
             This implementation assume `self` is
             a subclass of a native Python type
         """
-        return pack(self._trait.FORMAT, self) 
+        return pack(self._trait.FORMAT, self)
 
 class Integer(int, Value):
     def __new__(cls, value, **kwargs):
@@ -244,14 +252,14 @@ class Integer(int, Value):
 
     def __init__(self, value, *, trait = None, payload = None, parent = None):
         Node.__init__(self, trait = trait or IntTrait, payload = payload, parent = parent)
-    
+
 class Float(float, Value):
     def __new__(cls, value, **kwargs):
         return float.__new__(cls, value)
 
     def __init__(self, value, *, trait = None, payload = None, parent = None):
         Node.__init__(self, trait = trait or DoubleTrait, payload = payload, parent = parent)
-    
+
 class String(str, Value):
     def __new__(cls, value, **kwargs):
         return str.__new__(cls, value)
@@ -318,10 +326,10 @@ class Array(Value):
         self.invalidate()
         self._items.insert(idx, value)
 
-    
-# ==================================================================== 
+
+# ====================================================================
 # Proxy
-# ==================================================================== 
+# ====================================================================
 class Proxy(Node):
     """ A proxy stores binary NBT data as read from a binary stream
         (i.e. without decoding them)
@@ -394,6 +402,7 @@ class ListNode(Node, collections.abc.MutableSequence, collections.abc.Hashable):
         return super().__repr__() + " {" +\
                 ", ".join(repr(item) for item in self._items) +\
                 "}"
+
     #------------------------------------
     # Node interface
     #------------------------------------
@@ -404,6 +413,16 @@ class ListNode(Node, collections.abc.MutableSequence, collections.abc.Hashable):
         output.write(len(self._items).to_bytes(4, 'big'))
         for item in self._items:
             item.write_to(output, name=None)
+
+    #------------------------------------
+    # Managing ancestors chain
+    #------------------------------------
+    def register_parent(self,parent):
+        # Only composite nodes can induce circular references
+        if parent.has_ancestor(self):
+            raise CircularReferenceError()
+
+        super().register_parent(parent)
 
     #------------------------------------
     # Proxy interface
@@ -468,6 +487,16 @@ class CompoundNode(Node, collections.abc.MutableMapping, collections.abc.Hashabl
         for name, item in self._items.items():
             item.write_to(output, name=name)
         output.write(b"\x00")
+
+    #------------------------------------
+    # Managing ancestors chain
+    #------------------------------------
+    def register_parent(self,parent):
+        # Only composite nodes can induce circular references
+        if parent.has_ancestor(self):
+            raise CircularReferenceError()
+
+        super().register_parent(parent)
 
     #------------------------------------
     # Proxy interface
@@ -538,7 +567,7 @@ class CompoundNode(Node, collections.abc.MutableMapping, collections.abc.Hashabl
         else:
           del self[name]
 
-# ==================================================================== 
+# ====================================================================
 # Reader
 # ====================================================================
 class Reader:
@@ -552,7 +581,7 @@ class Reader:
 
 class AtomReader(Reader):
     def make_from_payload(self, base, offset, *, parent):
-        payload = base[offset:offset+self._trait.SIZE] 
+        payload = base[offset:offset+self._trait.SIZE]
         return AtomProxy(trait=self._trait, payload=payload, parent=parent),offset+self._trait.SIZE
 
 class ArrayReader(Reader):
@@ -576,8 +605,8 @@ class ListReader(Reader):
         count, = unpack('>i',bytes(base[offset:offset+4]))
         offset += 4
         # XXX Check implications of that statement:
-        # """ If the length of the list is 0 or negative, 
-        #     the type may be 0 (End) but otherwise it must 
+        # """ If the length of the list is 0 or negative,
+        #     the type may be 0 (End) but otherwise it must
         #     be any other type. """
         #  -- https://wiki.vg/NBT#Specification
 
@@ -589,7 +618,7 @@ class ListReader(Reader):
           container._items.append(item) # direct access to the storage to bypass invalidate()
 
           count -= 1
-        
+
         container._payload = base[start:offset]
         return container, offset
 
@@ -603,13 +632,13 @@ class CompoundReader(Reader):
           if type(item) is End:
             break
           container._items[name] = item # direct access to the storage to bypass invalidate()
-          
+
         container._payload = base[start:offset]
         return container, offset
 
-# ==================================================================== 
+# ====================================================================
 # Traits
-# ==================================================================== 
+# ====================================================================
 class TraitMetaclass(type):
     TRAITS = {}
 
@@ -639,7 +668,7 @@ class Trait(metaclass=TraitMetaclass):
         """ Call the most specialized visitor method for this node
         """
         return visitor.__getattribute__(cls.VISIT)();
-    
+
 class AtomTrait(Trait):
     READER = AtomReader
     VISIT = 'visitAtom'
