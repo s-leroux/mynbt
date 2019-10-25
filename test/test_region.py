@@ -30,7 +30,7 @@ class TestRegion(unittest.TestCase):
         region = Region(broken_header.to_bytes(4, 'big'))
         chunk = region.chunk_info(0,0)
         self.assertEqual([chunk.addr,chunk.size], [addr, size])
-        self.assertEqual(chunk.data, EmptyPage*size)
+        self.assertEqual(chunk.data, EMPTY_PAGE*size)
 
     def test_4(self):
         """ Region should compute logical page usage bitmap

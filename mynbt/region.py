@@ -12,6 +12,7 @@ from time import time
 from struct import unpack
 from array import array
 from warnings import warn
+from collections import namedtuple
 import zlib
 import gzip
 import io
@@ -21,6 +22,14 @@ from mynbt.nbt import TAG
 PAGE_SIZE=4096
 """ Page-size (in bytes) in the region file
 """
+
+EMPTY_PAGE = bytes(PAGE_SIZE)
+""" An page full of \x00 bytes
+"""
+
+ChunkInfo = namedtuple('ChunkInfo', ['addr', 'size', 'timestamp', 'x', 'z', 'data'])
+EMPTY_CHUNK = ChunkInfo(0,0,0,0,0,EMPTY_PAGE[0:0])
+
 
 #
 # XXX Avoid module's global namespace polution by defining the
@@ -75,11 +84,6 @@ def chunk_to_index(x, z):
     assert_in_range(x, 0, 32)
     assert_in_range(z, 0, 32)
     return 32*z+x
-
-EmptyPage = bytes(PAGE_SIZE)
-from collections import namedtuple
-ChunkInfo = namedtuple('ChunkInfo', ['addr', 'size', 'timestamp', 'x', 'z', 'data'])
-EMPTY_CHUNK = ChunkInfo(0,0,0,0,0,memoryview(EmptyPage[0:0]))
 
 # ====================================================================
 # Chunk
@@ -331,7 +335,7 @@ class Region:
 
             pad = len(chunk.data)%4096
             if pad > 0:
-                output.write(EmptyPage[-pad:])
+                output.write(EMPTY_PAGE[-pad:])
 
     @staticmethod
     def open(path):
