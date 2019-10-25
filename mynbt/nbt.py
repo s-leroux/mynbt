@@ -110,6 +110,20 @@ class Node:
           else:
             assert item._payload is None
 
+    def has_ancestor(self, target):
+        """ Check if a node is self's ancestors list.
+            Used mostly for cycle detection.
+        """
+        queue = [self]
+        while queue:
+          item = queue.pop()
+          if target is item:
+            return True
+
+          queue.extend(item._parents)
+
+        return False
+
     #------------------------------------
     # NBT tree traversal
     #------------------------------------
@@ -493,6 +507,7 @@ class CompoundNode(Node, collections.abc.MutableMapping, collections.abc.Hashabl
             trait = old._trait if old is not None else TYPE_TO_TRAIT[type(value)]
             value = trait.VALUE(value, trait=trait)
 
+        value.register_parent(self)
         self._items[idx] = value
 
     def __delitem__(self, idx):

@@ -372,6 +372,50 @@ class TestCache(unittest.TestCase):
         self.assertIsNone(child1._payload)
         self.assertIsNone(t._payload)
 
+class TestCycleDetection(unittest.TestCase):
+    DATA = COMPOUND_FRAME(
+        WITH_NAME("d1", COMPOUND_FRAME)(
+          SHORT_FRAME(123, "a"),
+        ),
+        WITH_NAME("d2", COMPOUND_FRAME)(
+            WITH_NAME("d21", COMPOUND_FRAME)(
+              INT_FRAME(456, "b"),
+            ),
+        ),
+    )
+
+    def setUp(self):
+        nbt, *_ = TAG.parse(self.DATA)
+        self.root = nbt
+        self.d1 = nbt.d1
+        self.d2 = nbt.d2
+        self.d21 = nbt.d2.d21
+
+    def test_1(self):
+        """ A node should be detected as its own ancestor
+        """
+        self.assertTrue(self.root.has_ancestor(self.root))
+        self.assertTrue(self.d1.has_ancestor(self.d1))
+
+    def test_2(self):
+        """ A parent should be detected as an ancestor
+        """
+        self.assertTrue(self.d1.has_ancestor(self.root))
+        self.assertTrue(self.d21.has_ancestor(self.d2))
+
+    def test_3(self):
+        """ A grand-parent should be detected as an ancestor
+        """
+        self.assertTrue(self.d21.has_ancestor(self.root))
+
+    def test_4(self):
+        """ Ancestor detection should work on DAG`
+        """
+        self.d11 = self.d1.d11 = self.d21
+        self.assertIs(self.d11, self.d21)
+        self.assertTrue(self.d11.has_ancestor(self.d2))
+        self.assertTrue(self.d11.has_ancestor(self.d1))
+
 class TestSetValue(unittest.TestCase):
     def test_set_value_compound(self):
         """ Compound items can be updated
