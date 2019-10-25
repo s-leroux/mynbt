@@ -187,3 +187,147 @@ class TestRegion(unittest.TestCase):
         region = Region.open('test/tmp/dump.bin')
         chunk = region.parse_chunk(1,2)
         # print(chunk)
+
+class TestRegionEdgeCases(unittest.TestCase):
+    R = REGION(10*PAGE_SIZE,
+      CHUNK(3,4,pageaddr=3,data=CHUNK_DATA(
+          COMPOUND_FRAME(
+              WITH_NAME("d1", COMPOUND_FRAME)(
+                SHORT_FRAME(56, "a"),
+              ),
+              WITH_NAME("d2", COMPOUND_FRAME)(
+                  WITH_NAME("d21", COMPOUND_FRAME)(
+                    INT_FRAME(78, "b"),
+                  ),
+              ),
+          )
+      )),
+    )
+
+    def setUp(self):
+        self.root = Region(self.R)
+
+    def test_1(self):
+        """ Parsing a non-existant chunk should
+            return None
+        """
+        nbt = self.root.parse_chunk(5,5)
+        self.assertIsNone(nbt)
+
+    def test_2(self):
+        """ In a context manager, parsing a non-existant chunk should
+            return None
+        """
+        with self.assertRaises(EmptyChunkError) as cm:
+            with self.root.chunk(5,5).parse() as nbt:
+                self.assertIsNone(nbt)
+
+    def test_3(self):
+        """ Region should not break on loading damaged files
+        """
+        region = Region.open('test/data/broken-r.-1.-1.mca')
+        with warnings.catch_warnings(record=True) as w:
+            # Cause all warnings to always be triggered.
+            warnings.simplefilter("always")
+
+            # this file has 3 page used by multiple chunks:
+            #
+            # DuplicatePage: Page 1168 of test/data/broken-r.-1.-1.mca is used by multiple chunks: ((28, 8), (17, 14))
+            # DuplicatePage: Page 1297 of test/data/broken-r.-1.-1.mca is used by multiple chunks: ((22, 6), (22, 9))
+            # DuplicatePage: Page 1298 of test/data/broken-r.-1.-1.mca is used by multiple chunks: ((22, 6), (22, 9))
+            # 
+            region.check()
+        
+        self.assertEqual(len(w), 3)
+        for it in w:
+            self.assertIs(type(it.message), DuplicatePage)
+
+    def test_4(self):
+        """ Region should load "broken" chunks
+        """
+        region = Region.open('test/data/broken-r.-1.-1.mca')
+
+        #
+        # chunk (17,14) points to garbage data
+        #
+        with self.assertRaises(BadChunkError) as cm:
+            nbt = region.parse_chunk(17,14)
+
+        #
+        # Chunk (22,9) points to data belonging to another chunk
+        #
+        with warnings.catch_warnings(record=True) as w:
+            # Cause all warnings to always be triggered.
+            warnings.simplefilter("always")
+
+            nbt = region.parse_chunk(22,9)
+
+        self.assertEqual([type(it.message) for it in w], [InconsistentLocation])
+        
+
+class TestInterRegion(unittest.TestCase):
+    R1 = REGION(10*PAGE_SIZE,
+      CHUNK(1,2,pageaddr=3,data=CHUNK_DATA(
+          COMPOUND_FRAME(
+              WITH_NAME("r1d1", COMPOUND_FRAME)(
+                SHORT_FRAME(12, "a"),
+              ),
+              WITH_NAME("r1d2", COMPOUND_FRAME)(
+                  WITH_NAME("r1d21", COMPOUND_FRAME)(
+                    INT_FRAME(34, "b"),
+                  ),
+              ),
+          ),
+      )),
+    )
+
+    R2 = REGION(10*PAGE_SIZE,
+      CHUNK(3,4,pageaddr=3,data=CHUNK_DATA(
+          COMPOUND_FRAME(
+              WITH_NAME("r2d1", COMPOUND_FRAME)(
+                SHORT_FRAME(56, "a"),
+              ),
+              WITH_NAME("r2d2", COMPOUND_FRAME)(
+                  WITH_NAME("r2d21", COMPOUND_FRAME)(
+                    INT_FRAME(78, "b"),
+                  ),
+              ),
+          )
+      )),
+    )
+
+    def setUp(self):
+        self.r1 = Region(self.R1)
+        self.r2 = Region(self.R2)
+
+    def test_1(self):
+        """ Chunk raw data overwrite chunks in another region
+        """
+
+        chunk = self.r1.get_chunk(1,2)
+        self.r2.set_chunk(1,2,chunk)
+
+        nbt = self.r2.parse_chunk(1,2)
+        self.assertEqual(nbt.r1d1.a, 12)
+
+    def test_2(self):
+        """ Chunk raw data can be copied between regions
+        """
+
+        chunk = self.r1.get_chunk(1,2)
+        self.r2.set_chunk(3,4,chunk)
+
+        nbt = self.r2.parse_chunk(3,4)
+        self.assertEqual(nbt.r1d1.a, 12)
+
+    def test_3(self):
+        """ Context managers can be used to copy data between
+            regions
+        """
+        with self.r1.chunk(1,2).parse() as nbt1:
+            with self.r2.chunk(3,4).parse() as nbt2:
+                nbt1.r1d1 = nbt2.r2d2
+
+        result = self.r1.parse_chunk(1,2)
+        self.assertEqual(result.r1d1.r2d21.b, 78)
+

@@ -16,8 +16,11 @@ from collections import namedtuple
 import zlib
 import gzip
 import io
+import itertools
 
-from mynbt.nbt import TAG
+from mynbt.nbt import TAG, EmptyChunkError
+from mynbt.error import *
+from mynbt.utils import hexdump
 
 PAGE_SIZE=4096
 """ Page-size (in bytes) in the region file
@@ -49,11 +52,40 @@ DECOMPRESSOR = {
   ZLIB: zlib.decompress,
 }
 
-class RegionWarning(UserWarning):
-    """ Base class for ll warnings issued by the Region class
+# ====================================================================
+# Errors
+# ====================================================================
+class RegionError(MyNBTError):
+    """ Base class for all errors issued by the Region class
     """
-    def __init__(self, message, **kwargs):
-        super().__init__(message.format(**kwargs))
+    pass
+
+class BadChunkError(RegionError):
+    def __init__(self, region, x, z, data, msg="", **kwargs):
+        self._chunk = (x,z)
+        super().__init__(
+            "Header for chunk {x},{z} in {region} does not seem valid:\n{msg}\n{dump}",
+            x=x,z=z,region=region,msg=msg,
+            dump="\n".join(itertools.islice(hexdump(data), 10))
+        )
+
+class UnknownCompressionError(BadChunkError):
+    def __init__(self, region, x, z, data, **kwargs):
+        self._chunk = (x,z)
+        super().__init__(x=x,z=z,region=region,data=data,msg="Unknown compression code {code}".format(code=data[4:5].hex()))
+
+class MissingDataError(BadChunkError):
+    def __init__(self, region, x, z, data, **kwargs):
+        self._chunk = (x,z)
+        super().__init__(x=x,z=z,region=region,data=data,msg="Chunck logical size greater than its physical size")
+
+# ====================================================================
+# Warnings
+# ====================================================================
+class RegionWarning(MyNBTWarning):
+    """ Base class for all warnings issued by the Region class
+    """
+    pass
 
 class OddChunkLocation(RegionWarning):
     pass
@@ -64,9 +96,18 @@ class ChunkDataInHeader(OddChunkLocation):
         super().__init__("Data for chunk {x},{z} in header", x=x,z=z)
 
 class DuplicatePage(OddChunkLocation):
-    def __init__(self, page, chunks, **kwargs):
-        super().__init__("Page {page} is used by multiple chunks: {chunks}", page=page, chunks=chunks)
+    def __init__(self, region, page, chunks, **kwargs):
+        super().__init__("Page {page} of {region} is used by multiple chunks: {chunks}", region=region, page=page, chunks=chunks)
 
+class InconsistentLocation(RegionWarning):
+    def __init__(self, region, nbt, ploc, lloc, **kwargs):
+        self._nbt = nbt
+        super().__init__("Chunk {ploc} shouldn't contain data for chunk {lloc}", ploc=ploc, lloc=lloc, region=region)
+
+
+# ====================================================================
+# Utilities
+# ====================================================================
 def assert_in_range(x, start, end, msg="value"):
     if start <= x < end:
       return
@@ -103,7 +144,11 @@ class Chunk:
         """
         chunk = self
         nbt = self._region.parse_chunk(self._x, self._z)
+        if not nbt:
+            raise EmptyChunkError(self._region, self._x, self._z)
+
         old_version = nbt._version
+
         class ContextManager:
             def __getattr__(self, name):
                 return getattr(nbt, name)
@@ -135,7 +180,11 @@ class Chunk:
 # Region
 # ====================================================================
 class Region:
-    def __init__(self, data=b""):
+    def __init__(self, data=b"", *, name=None):
+      """ Create a new region from binary data following the MC region format
+          descibed in https://minecraft.gamepedia.com/Region_file_format.
+      """
+      self._name = name or super().__str__()
       self._bitmap = None
       self._issues = []
 
@@ -173,6 +222,9 @@ class Region:
 
             self._chunks[i] = ChunkInfo(addr, size, timestamp, x, z, data)
 
+    def __str__(self):
+        return self._name
+
     def invalidate(self):
         """ Invalidate cached data.
         """
@@ -184,13 +236,13 @@ class Region:
     def check(self):
         """ Run all diagnosis function
         """
-        bitmap()
+        self.bitmap()
 
     def track(self, issue):
         """ Track an issue
         """
         self._issues.append(issue)
-        warn(issue)
+        warn(issue, stacklevel=2)
 
     def fix(self):
         """ (Try to) fix all tracked issues
@@ -218,7 +270,7 @@ class Region:
                         duplicate_pages[n] = owners
 
             for n, chunks in duplicate_pages.items():
-                self.track(DuplicatePage(n, chunks))
+                self.track(DuplicatePage(self, n, chunks))
 
             self._bitmap = bitmap
 
@@ -242,9 +294,29 @@ class Region:
       if mem is None:
         return None
 
+      length = int.from_bytes(mem[0:4], 'big')
+      if length == 0:
+          return None
+
+      if length > len(mem)-5:
+          raise MissingDataError(self, x, z, mem) from None
+
       compression = bytes(mem[4:5])
-      data = DECOMPRESSOR[compression](mem[5:])
-      nbt, *_ = TAG.parse(data,0)
+      try:
+          data = DECOMPRESSOR[compression](mem[5:5+length])
+      except KeyError:
+          raise UnknownCompressionError(self, x, z, mem) from None
+      nbt, *_ = TAG.parse(data)
+
+      try:
+          lx = nbt.Level.xPos
+          lz = nbt.Level.zPos
+          if (x,z) != (lx%32,lz%32):
+            self.track(InconsistentLocation(self, nbt, (x,z), (lx,lz)))
+
+      except (AttributeError, KeyError):
+          pass
+
       return nbt
 
     def write_chunk(self, x, z, nbt, *, compression=ZLIB):
@@ -342,4 +414,4 @@ class Region:
       with open(path, 'rb') as f:
         map = mmap(f.fileno(), 0, prot=PROT_READ)
 
-      return Region(map)
+      return Region(map, name=path)

@@ -6,11 +6,25 @@ import collections
 import io
 
 from mynbt.visitor import Visitor, Exporter
+from mynbt.error import *
 
-class CircularReferenceError(Exception):
+# ====================================================================
+# Errors
+# ====================================================================
+class NBTError(MyNBTError):
+    pass
+
+class EmptyChunkError(NBTError):
+    def __init__(self, region, x, y):
+        super().__init__("The chunk ({x},{y}) of region {region} is empty", x=x,y=y,region=region)
+
+class CircularReferenceError(NBTError):
     def __init__(self):
         super().__init__("Circular reference detected")
 
+# ====================================================================
+# Core namespace XXX to rename
+# ====================================================================
 class TAG:
     @staticmethod
     def parse_id(base, offset):
