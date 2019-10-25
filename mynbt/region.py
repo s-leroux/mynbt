@@ -64,7 +64,7 @@ class BadChunkError(RegionError):
     def __init__(self, region, chunk_info, msg="", **kwargs):
         self._chunk = chunk_info
         super().__init__(
-            "Header for chunk {x},{z} in {region} does not seem valid:\n{msg}\n{dump}",
+            "Header for chunk ({x},{z}) in {region} does not seem valid:\n{msg}\n{dump}",
             x=chunk_info.x, z=chunk_info.z,
             region=region,msg=msg,
             dump="\n".join(itertools.islice(hexdump(chunk_info.data), 10))
@@ -103,7 +103,15 @@ class ChunkDataInHeader(BadChunk):
     def __init__(self, chunk_info, **kwargs):
         super().__init__(
             chunk_info,
-            "Data for chunk {x},{z} in header",
+            "Data for chunk ({x},{z}) points to the header",
+            x=chunk_info.x,z=chunk_info.z
+        )
+
+class MissingData(BadChunk):
+    def __init__(self, chunk_info, **kwargs):
+        super().__init__(
+            chunk_info,
+            "Missing data for chunk ({x},{z})",
             x=chunk_info.x,z=chunk_info.z
         )
 
@@ -118,7 +126,6 @@ class InconsistentLocation(BadChunk):
             lloc=lloc,
             region=region
         )
-
 
 class DuplicatePage(RegionWarning):
     def __init__(self, region, page, chunks, **kwargs):
@@ -229,22 +236,26 @@ class Region:
         z, x = divmod(i, 32)
         location = int.from_bytes(locations[i:][:1], 'big')
         if location != 0:
+            issues = []
+
             timestamp = int.from_bytes(timestamps[i:][:1], 'big')
             addr, size = location>>8,location&0xFF # Addr and size in 4KiB pages
+            if addr < 2:
+                issues.append(ChunkDataInHeader)
 
             data = view[addr*PAGE_SIZE:][:size*PAGE_SIZE]
 
             # Deal with missing data
             missing_data = size*PAGE_SIZE - len(data)
             if missing_data:
+                issues.append(MissingData)
                 data = bytes(data) + bytes(missing_data)
 
             self._pagecount = max(self._pagecount, addr+size)
 
-            self._chunks[i] = ChunkInfo(addr, size, timestamp, x, z, data)
-
-            if addr < 2:
-                self.track(ChunkDataInHeader(self._chunks[i]))
+            self._chunks[i] = ci = ChunkInfo(addr, size, timestamp, x, z, data)
+            for issue in issues:
+                self.track(issue(ci))
 
     def __str__(self):
         return self._name
@@ -266,7 +277,7 @@ class Region:
         """ Track an issue
         """
         self._issues.append(issue)
-        # print(issue)
+        #print(issue)
         warn(issue, stacklevel=2)
 
     def fix(self):
@@ -323,8 +334,15 @@ class Region:
       if length == 0:
           return None
 
+      if length > 256*PAGE_SIZE:
+          # chunk max length is 1MiB
+          raise BadChunkError(self, chunk_info)
+
       if length > len(mem)-5:
-          raise MissingDataError(self, chunk_info) from None
+          # fix missing data
+          mem = bytes(mem).ljust(length+5)
+          chunk_info = self.set_chunk(x,z,mem)
+          track(MissingData(chunk_info))
 
       compression = bytes(mem[4:5])
       try:
@@ -380,7 +398,8 @@ class Region:
         timestamp = timestamp or int(time())
 
         idx = chunk_to_index(x,z)
-        self._chunks[idx] = ChunkInfo(-1, -1, timestamp, x, z, data)
+        self._chunks[idx] = ci = ChunkInfo(-1, -1, timestamp, x, z, data)
+        return ci
 
     def kill_chunk(self, x, z):
         """ Remove a chunk
