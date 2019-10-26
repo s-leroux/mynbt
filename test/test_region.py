@@ -27,8 +27,14 @@ class TestRegion(unittest.TestCase):
         """
         addr, size = 5, 3
         broken_header = (5<<8|3)
-        region = Region(broken_header.to_bytes(4, 'big'))
-        chunk = region.chunk_info(0,0)
+
+        with warnings.catch_warnings(record=True) as w:
+            # Cause all warnings to always be triggered.
+            warnings.simplefilter("always")
+
+            region = Region(broken_header.to_bytes(4, 'big'))
+            chunk = region.chunk_info(0,0)
+
         self.assertEqual([chunk.addr,chunk.size], [addr, size])
         self.assertEqual(chunk.data, EMPTY_PAGE*size)
 
@@ -184,9 +190,13 @@ class TestRegion(unittest.TestCase):
         with open('test/tmp/dump.bin', 'wb') as f:
             f.write(buffer)
 
-        region = Region.open('test/tmp/dump.bin')
-        chunk = region.parse_chunk(1,2)
-        # print(chunk)
+        with warnings.catch_warnings(record=True) as w:
+            # Cause all warnings to always be triggered.
+            warnings.simplefilter("error")
+
+            region = Region.open('test/tmp/dump.bin')
+            chunk = region.parse_chunk(1,2)
+            # print(chunk)
 
 class TestRegionEdgeCases(unittest.TestCase):
     R = REGION(10*PAGE_SIZE,

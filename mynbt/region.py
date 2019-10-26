@@ -431,7 +431,7 @@ class Region:
         addr = 2
         for chunk in self._chunks:
 
-            size = (len(chunk.data)+4095)//4096
+            size = (len(chunk.data)+PAGE_SIZE-1)//PAGE_SIZE
             if size == 0:
                 word = b"\x00\x00\x00\x00"
             else:
@@ -449,9 +449,9 @@ class Region:
         for chunk in self._chunks:
             output.write(chunk.data)
 
-            pad = len(chunk.data)%4096
+            pad = len(chunk.data)%PAGE_SIZE
             if pad > 0:
-                output.write(EMPTY_PAGE[-pad:])
+                output.write(EMPTY_PAGE[pad:])
 
     @staticmethod
     def open(path):
