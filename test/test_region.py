@@ -123,7 +123,7 @@ class TestRegion(unittest.TestCase):
         #self.assertEqual(bytes(region._timestamps), bytes(4096))
         #self.assertEqual(region._eof, 2*4096)
 
-        self.assertEqual(region.chunk_info(1,2), (0, 0, 0, 0, 0, b""))
+        self.assertEqual(region.chunk_info(1,2), (None, None, 0, 0, 0, b""))
 
     def test_write_chunk(self):
         region = Region()
@@ -245,9 +245,9 @@ class TestRegionEdgeCases(unittest.TestCase):
             # DuplicatePage: Page 1168 of test/data/broken-r.-1.-1.mca is used by multiple chunks: ((28, 8), (17, 14))
             # DuplicatePage: Page 1297 of test/data/broken-r.-1.-1.mca is used by multiple chunks: ((22, 6), (22, 9))
             # DuplicatePage: Page 1298 of test/data/broken-r.-1.-1.mca is used by multiple chunks: ((22, 6), (22, 9))
-            # 
+            #
             region.check()
-        
+
         self.assertEqual(len(w), 3)
         for it in w:
             self.assertIs(type(it.message), DuplicatePage)
@@ -273,7 +273,7 @@ class TestRegionEdgeCases(unittest.TestCase):
             nbt = region.parse_chunk(22,9)
 
         self.assertEqual([type(it.message) for it in w], [InconsistentLocation])
-        
+
 
 class TestInterRegion(unittest.TestCase):
     R1 = REGION(10*PAGE_SIZE,
@@ -341,3 +341,50 @@ class TestInterRegion(unittest.TestCase):
         result = self.r1.parse_chunk(1,2)
         self.assertEqual(result.r1d1.r2d21.b, 78)
 
+
+class TestChunks(unittest.TestCase):
+    R = REGION(10*PAGE_SIZE,
+      CHUNK(1,2,pageaddr=3,data=CHUNK_DATA(
+          STRING_FRAME("Chunk 1,2", "data"),
+      )),
+      CHUNK(3,3,pageaddr=4,data=CHUNK_DATA(
+          STRING_FRAME("Chunk 3,3", "data"),
+      )),
+      CHUNK(3,4,pageaddr=5,data=
+          STRING("** BAD CHUNK **"),
+      ),
+      CHUNK(3,5,pageaddr=6,data=CHUNK_DATA(
+          STRING_FRAME("Chunk 3,5 [change me]", "data"),
+      )),
+      CHUNK(6,6,pageaddr=7,data=CHUNK_DATA(
+          STRING_FRAME("Chunk 6,6 [set to garbage]", "data"),
+      )),
+      CHUNK(6,7,pageaddr=8,data=CHUNK_DATA(
+          STRING_FRAME("Chunk 6,7 [kill me]", "data"),
+      )),
+      CHUNK(6,8,pageaddr=9,data=CHUNK_DATA(
+          STRING_FRAME("Chunk 6,8", "data"),
+      )),
+    )
+
+    def setUp(self):
+        self.region = Region(self.R)
+        self.region.set_chunk(3,5, bytes.fromhex(CHUNK_DATA(STRING_FRAME("Updated chunk 3,5"))))
+        self.region.set_chunk(6,6, b"** BAD CHUNK **")
+        self.region.kill_chunk(6,7)
+
+
+    def test_1(self):
+        """ Chunk raw data overwrite chunks in another region
+        """
+
+        with warnings.catch_warnings(record=True):
+            chunks = [(chunk.x, chunk.z) for chunk in self.region.chunks()]
+
+        self.assertSequenceEqual(chunks, [
+          (1,2), (3,3), (3,5), (6,8)
+        ])
+
+        # with warnings.catch_warnings(record=True):
+        #     for chunk in self.region.chunks():
+        #         print(chunk)

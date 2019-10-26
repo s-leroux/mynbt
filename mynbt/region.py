@@ -31,7 +31,7 @@ EMPTY_PAGE = bytes(PAGE_SIZE)
 """
 
 ChunkInfo = namedtuple('ChunkInfo', ['addr', 'size', 'timestamp', 'x', 'z', 'data'])
-EMPTY_CHUNK = ChunkInfo(0,0,0,0,0,EMPTY_PAGE[0:0])
+EMPTY_CHUNK = ChunkInfo(None,None,0,0,0,EMPTY_PAGE[0:0])
 
 
 #
@@ -67,7 +67,7 @@ class BadChunkError(RegionError):
             "Header for chunk ({x},{z}) in {region} does not seem valid:\n{msg}\n{dump}",
             x=chunk_info.x, z=chunk_info.z,
             region=region,msg=msg,
-            dump="\n".join(itertools.islice(hexdump(chunk_info.data), 10))
+            dump="\n".join(hexdump(chunk_info.data, maxlines=10))
         )
 
 class UnknownCompressionError(BadChunkError):
@@ -75,7 +75,7 @@ class UnknownCompressionError(BadChunkError):
         super().__init__(
             chunk_info=chunk_info,
             region=region,
-            msg="Unknown compression code {code}".format(code=data[4:5].hex())
+            msg="Unknown compression code {code}".format(code=chunk_info.data[4:5].hex())
         )
 
 class MissingDataError(BadChunkError):
@@ -98,6 +98,16 @@ class BadChunk(RegionWarning):
     def __init__(self, chunk_info, msg, **kwargs):
         self._chunk = chunk_info
         super().__init__(msg, **kwargs)
+
+class BadChunkHeader(BadChunk):
+    def __init__(self, chunk_info, **kwargs):
+        super().__init__(
+            chunk_info,
+            "Bad header for chunk ({x},{z}): length={length:d} compression={compression:d}",
+            x=chunk_info.x,z=chunk_info.z,
+            length=int.from_bytes(chunk_info.data[:5],'big'),
+            compression=chunk_info.data[5]
+        )
 
 class ChunkDataInHeader(BadChunk):
     def __init__(self, chunk_info, **kwargs):
@@ -167,6 +177,12 @@ class Chunk:
         self._region = region
         self._x = x
         self._z = z
+
+    def __str__(self):
+        return "Chunk({x},{z})".format(x=self.x, z=self.z)
+
+    x = property(lambda self: self._x)
+    z = property(lambda self: self._z)
 
     def parse(self):
         """ Parse the chuck and returns the corresponding
@@ -280,8 +296,9 @@ class Region:
         #print(issue)
         warn(issue, stacklevel=2)
 
-    def fix(self):
-        """ (Try to) fix all tracked issues
+    def fix(self, max_attempts=5):
+        """ (Try to) fix all tracked issues.
+            Return a _new_ region object with the issues fixed
         """
         # XXX Issue fixing might be implemented using a modified
         #     visitor pattern in an itertion loop so each chunk
@@ -300,10 +317,11 @@ class Region:
         if self._bitmap is None:
             bitmap = [()]*self._pagecount
             for chunk in self._chunks:
-                for n in range(chunk.addr, chunk.addr+chunk.size):
-                    owners = bitmap[n] = (*bitmap[n], (chunk.x,chunk.z))
-                    if len(owners) > 1:
-                        duplicate_pages[n] = owners
+                if chunk.addr is not None:
+                    for n in range(chunk.addr, chunk.addr+chunk.size):
+                        owners = bitmap[n] = (*bitmap[n], (chunk.x,chunk.z))
+                        if len(owners) > 1:
+                            duplicate_pages[n] = owners
 
             for n, chunks in duplicate_pages.items():
                 self.track(DuplicatePage(self, n, chunks))
@@ -325,31 +343,49 @@ class Region:
     #------------------------------------
     # Chunk management
     #------------------------------------
-    def parse_chunk(self, x, z):
-      *_, mem = chunk_info = self.chunk_info(x,z)
-      if mem is None:
-        return None
+    def parse_chunk_header(self, chunk_info):
+        """ Parse the chunk header, returning
+            its logical size, suitable decompressor,
+            and data to decompress
+        """
+        *_, mem = chunk_info
+        length = int.from_bytes(mem[0:4], 'big')
+        if length == 0:
+            return 0, None, b''
 
-      length = int.from_bytes(mem[0:4], 'big')
+        if length > 256*PAGE_SIZE:
+            # chunk max length is 1MiB
+            raise BadChunkError(self, chunk_info)
+
+        if length > len(mem)-5:
+            # fix missing data
+            mem = bytes(mem).ljust(length+5)
+            self.track(MissingData(chunk_info))
+
+        compression = bytes(mem[4:5])
+        try:
+            return length, DECOMPRESSOR[compression], mem[5:5+length]
+        except KeyError:
+            raise UnknownCompressionError(self, chunk_info) from None
+
+    def is_valid_chunk(self, chunk_info):
+        """ Return true if the chunk header can be
+            parsed.
+            Exceptions re wrapped in a warning
+        """
+        try:
+            length, *_ = self.parse_chunk_header(chunk_info)
+            return length > 0
+        except BadChunkError:
+            self.track(BadChunkHeader(chunk_info))
+
+    def parse_chunk(self, x, z):
+      chunk_info = self.chunk_info(x,z)
+      length, decompressor, data = self.parse_chunk_header(chunk_info)
       if length == 0:
           return None
 
-      if length > 256*PAGE_SIZE:
-          # chunk max length is 1MiB
-          raise BadChunkError(self, chunk_info)
-
-      if length > len(mem)-5:
-          # fix missing data
-          mem = bytes(mem).ljust(length+5)
-          chunk_info = self.set_chunk(x,z,mem)
-          track(MissingData(chunk_info))
-
-      compression = bytes(mem[4:5])
-      try:
-          data = DECOMPRESSOR[compression](mem[5:5+length])
-      except KeyError:
-          raise UnknownCompressionError(self, chunk_info) from None
-      nbt, *_ = TAG.parse(data)
+      nbt, *_ = TAG.parse(decompressor(data))
 
       try:
           lx = nbt.Level.xPos
@@ -378,7 +414,7 @@ class Region:
         logical_size = len(dump)
         dump = logical_size.to_bytes(4, 'big') + compression + dump
 
-        size = addr = -1
+        size = addr = None
         timestamp = int(time())
 
         idx = z*32+x
@@ -398,7 +434,7 @@ class Region:
         timestamp = timestamp or int(time())
 
         idx = chunk_to_index(x,z)
-        self._chunks[idx] = ci = ChunkInfo(-1, -1, timestamp, x, z, data)
+        self._chunks[idx] = ci = ChunkInfo(None, None, timestamp, x, z, data)
         return ci
 
     def kill_chunk(self, x, z):
@@ -411,13 +447,16 @@ class Region:
         """
         self.set_chunk(to_x, to_z, self.get_chunk(from_x, from_z))
 
+    #------------------------------------
+    # Chunk iterator & context manager
+    #------------------------------------
     def chunk(self, x, z):
         return Chunk(self, x, z)
 
-    def chunk_cm(self, x, z):
-      """ Return a context manager to modify and update a chunk from the region
-      """
-      return ChunkContextManager(self, x, z);
+    def chunks(self, filter=lambda region, info : len(info.data) and region.is_valid_chunk(info)):
+        for chunk in self._chunks:
+            if filter(self, chunk):
+                yield self.chunk(chunk.x, chunk.z)
 
     #------------------------------------
     # I/O
