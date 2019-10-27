@@ -281,6 +281,11 @@ class String(str, Value):
     def __init__(self, value, *, trait = None, payload = None, parent = None):
         Node.__init__(self, trait = trait or StringTrait, payload = payload, parent = parent)
 
+    def pack(self):
+        data = self.encode('utf8')
+
+        return len(data).to_bytes(2, 'big') + data
+
 class Array(Value):
     def __init__(self, values, *, trait, payload = None, parent = None):
         Node.__init__(self, trait = trait, payload = payload, parent = parent)
@@ -405,7 +410,7 @@ class ArrayProxy(Proxy):
 
 class StringProxy(Proxy):
     def unpack(self):
-        return bytes(self._payload).decode("utf8") # XXX unneeded (?) copy
+        return bytes(self._payload[2:]).decode("utf8") # XXX unneeded (?) copy
 
 class ListNode(Node, collections.abc.MutableSequence, collections.abc.Hashable):
     def __init__(self, *, trait, payload, parent):
@@ -607,7 +612,7 @@ class ArrayReader(Reader):
 class StringReader(Reader):
     def make_from_payload(self, base, offset, *, parent):
         l, = unpack('>h',bytes(base[offset:offset+2]))
-        payload = base[offset+2:offset+2+l]
+        payload = base[offset:offset+2+l]
         return StringProxy(trait=self._trait, payload=payload, parent=parent),offset+2+l
 
 class ListReader(Reader):
