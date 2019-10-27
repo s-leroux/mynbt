@@ -539,6 +539,9 @@ class TestSave(unittest.TestCase):
         shutil.copy(FILE['level.dat'],FILE['copy.dat'])
 
     def test_1(self):
+        """ NBT tree parsed from file can be saved
+            with their original name
+        """
         nbt = TAG.parse_file(FILE['copy.dat'])
         self.assertNotEqual(nbt.Data.LevelName, 'copy')
         nbt.Data.LevelName='copy'
@@ -546,3 +549,27 @@ class TestSave(unittest.TestCase):
 
         nbt = TAG.parse_file(FILE['copy.dat'])
         self.assertEqual(nbt.Data.LevelName, 'copy')
+
+    def test_2(self):
+        """ NBT data from file act as a context manager to save changes
+        """
+        with TAG.parse_file(FILE['copy.dat']) as nbt:
+            self.assertNotEqual(nbt.Data.LevelName, 'copy')
+            nbt.Data.LevelName='copy'
+
+        with TAG.parse_file(FILE['copy.dat']) as nbt:
+            self.assertEqual(nbt.Data.LevelName, 'copy')
+
+    def test_3(self):
+        """ Non-modified files are not auto-saved
+        """
+        with open(FILE['copy.dat'], 'rb') as f:
+            old_data = f.read()
+
+        with TAG.parse_file(FILE['copy.dat']) as nbt:
+            self.assertNotEqual(nbt.Data.LevelName, 'copy')
+
+        with open(FILE['copy.dat'], 'rb') as f:
+            new_data = f.read()
+
+        self.assertEqual(old_data, new_data)
