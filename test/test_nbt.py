@@ -1,7 +1,14 @@
 import unittest
+import shutil
+import os.path
 
 from mynbt.nbt import *
 from test.data.nbt import *
+
+FILE = {
+  'level.dat': os.path.join('test','data','level.dat'),
+  'copy.dat': os.path.join('test','tmp','copy.dat'),
+}
 
 class TestNodeComparisons(unittest.TestCase):
     def test_1(self):
@@ -151,7 +158,7 @@ class TestParseFiles(unittest.TestCase):
     def test_parse_level(self):
         """ It should load uncompressed NBT files
         """
-        t = TAG.parse_file("test/data/level.dat")
+        t = TAG.parse_file(FILE['level.dat'])
         self.assertIsInstance(t, CompoundNode)
 
     def test_parse_server(self):
@@ -221,17 +228,17 @@ class TestListTag(unittest.TestCase):
 
 class TestCompoundTag(unittest.TestCase):
     def test_keys(self):
-        t = TAG.parse_file("test/data/level.dat")
+        t = TAG.parse_file(FILE['level.dat'])
         self.assertEqual(list(t.keys()), ['Data'])
 
     def test_get_attr(self):
-        t = TAG.parse_file("test/data/level.dat")
+        t = TAG.parse_file(FILE['level.dat'])
         item = t.Data
         self.assertIn('DataPacks', list(item.keys()))
         self.assertIn('GameRules', list(item.keys()))
 
     def test_get_item(self):
-        t = TAG.parse_file("test/data/level.dat")
+        t = TAG.parse_file(FILE['level.dat'])
         item = t['Data']
         self.assertIn('DataPacks', list(item.keys()))
         self.assertIn('GameRules', list(item.keys()))
@@ -332,7 +339,7 @@ class TestExport(unittest.TestCase):
 import gzip
 class TestCache(unittest.TestCase):
     def test_compound_cache(self):
-        with gzip.open("test/data/level.dat", "rb") as f:
+        with gzip.open(FILE['level.dat'], "rb") as f:
           data = f.read()
           t, _, offset = TAG.parse(data, 0)
 
@@ -497,7 +504,7 @@ class Versioning(unittest.TestCase):
     def test_verion(self):
         """ After parsing, nodes should be at version 0
         """
-        with gzip.open("test/data/level.dat", "rb") as f:
+        with gzip.open(FILE['level.dat'], "rb") as f:
           data = f.read()
           t, _, offset = TAG.parse(data, 0)
 
@@ -527,3 +534,15 @@ class Versioning(unittest.TestCase):
         v3 = t._version
         self.assertGreater(v3, v2)
 
+class TestSave(unittest.TestCase):
+    def setUp(self):
+        shutil.copy(FILE['level.dat'],FILE['copy.dat'])
+
+    def test_1(self):
+        nbt = TAG.parse_file(FILE['copy.dat'])
+        self.assertNotEqual(nbt.Data.LevelName, 'copy')
+        nbt.Data.LevelName='copy'
+        nbt.save()
+
+        nbt = TAG.parse_file(FILE['copy.dat'])
+        self.assertEqual(nbt.Data.LevelName, 'copy')

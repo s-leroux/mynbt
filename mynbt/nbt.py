@@ -78,8 +78,20 @@ class TAG:
           raise err or OSError("Can't open " + path)
 
         result, name, offset = TAG.parse(data, 0)
-
         assert data[offset:] == b""
+
+        #
+        # monkey patch the root object to add a save() method
+        class WithSave:
+            def save(self):
+                with reader(path, 'wb') as output:
+                    self.write_to(output)
+
+        cls = result.__class__
+        result.__class__ = type(cls.__name__, (cls, WithSave), {})
+        #
+        #
+
         return result
 
 # ====================================================================
