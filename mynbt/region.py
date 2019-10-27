@@ -511,7 +511,7 @@ class Region:
                 output.write(EMPTY_PAGE[pad:])
 
     @staticmethod
-    def open(path):
+    def fromFile(path):
       with open(path, 'rb') as f:
         map = mmap(f.fileno(), 0, prot=PROT_READ)
 

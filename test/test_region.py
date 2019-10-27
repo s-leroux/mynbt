@@ -155,7 +155,7 @@ class TestRegion(unittest.TestCase):
         self.assertEqual(nbt, 123)
 
     def test_region(self):
-        region = Region.open("test/data/region-r.0.0.mca")
+        region = Region.fromFile("test/data/region-r.0.0.mca")
         info = region.chunk_info(1,2)
         chunk = region.parse_chunk(1,2)
         # print(chunk.Level.Entities.export())
@@ -194,7 +194,7 @@ class TestRegion(unittest.TestCase):
             # Cause all warnings to always be triggered.
             warnings.simplefilter("error")
 
-            region = Region.open('test/tmp/dump.bin')
+            region = Region.fromFile('test/tmp/dump.bin')
             chunk = region.parse_chunk(1,2)
             # print(chunk)
 
@@ -235,7 +235,7 @@ class TestRegionEdgeCases(unittest.TestCase):
     def test_3(self):
         """ Region should not break on loading damaged files
         """
-        region = Region.open('test/data/broken-r.-1.-1.mca')
+        region = Region.fromFile('test/data/broken-r.-1.-1.mca')
         with warnings.catch_warnings(record=True) as w:
             # Cause all warnings to always be triggered.
             warnings.simplefilter("always")
@@ -255,7 +255,7 @@ class TestRegionEdgeCases(unittest.TestCase):
     def test_4(self):
         """ Region should load "broken" chunks
         """
-        region = Region.open('test/data/broken-r.-1.-1.mca')
+        region = Region.fromFile('test/data/broken-r.-1.-1.mca')
 
         #
         # chunk (17,14) points to garbage data
