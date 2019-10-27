@@ -101,12 +101,20 @@ class BadChunk(RegionWarning):
 
 class BadChunkHeader(BadChunk):
     def __init__(self, chunk_info, **kwargs):
+        data = chunk_info.data
+        if len(data) < 5:
+            msg = "Not enougth data ({:d} bytes)".format(len(data))
+        else:
+            length, compression, data = parse_chunk_header(data)
+            msg = "Bad header for chunk ({x},{z}): length={length:d} compression={compression:d}".format(
+              x=chunk_info.x,z=chunk_info.z,
+              length=length,
+              compression=compression[0]
+            )
+
         super().__init__(
             chunk_info,
-            "Bad header for chunk ({x},{z}): length={length:d} compression={compression:d}",
-            x=chunk_info.x,z=chunk_info.z,
-            length=int.from_bytes(chunk_info.data[:5],'big'),
-            compression=chunk_info.data[5]
+            msg,
         )
 
 class ChunkDataInHeader(BadChunk):
@@ -166,6 +174,16 @@ def chunk_to_index(x, z):
     assert_in_range(x, 0, 32)
     assert_in_range(z, 0, 32)
     return 32*z+x
+
+def parse_chunk_header(chunk_data):
+    """ Return the various part of a chunk header.
+        Do not perform any validation
+    """
+    return (
+      int.from_bytes(chunk_data[:4], 'big'),
+      chunk_data[4:5],
+      chunk_data[5:]
+    )
 
 # ====================================================================
 # Chunk
@@ -349,7 +367,8 @@ class Region:
             and data to decompress
         """
         *_, mem = chunk_info
-        length = int.from_bytes(mem[0:4], 'big')
+        length, compression, data = parse_chunk_header(chunk_info.data)
+
         if length == 0:
             return 0, None, b''
 
@@ -357,14 +376,13 @@ class Region:
             # chunk max length is 1MiB
             raise BadChunkError(self, chunk_info)
 
-        if length > len(mem)-5:
+        if length > len(data):
             # fix missing data
-            mem = bytes(mem).ljust(length+5)
+            mem = bytes(data).ljust(length)
             self.track(MissingData(chunk_info))
 
-        compression = bytes(mem[4:5])
         try:
-            return length, DECOMPRESSOR[compression], mem[5:5+length]
+            return length, DECOMPRESSOR[compression], data[:length]
         except KeyError:
             raise UnknownCompressionError(self, chunk_info) from None
 
