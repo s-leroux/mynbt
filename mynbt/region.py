@@ -513,6 +513,8 @@ class Region:
     @staticmethod
     def fromFile(path):
       with open(path, 'rb') as f:
-        map = mmap(f.fileno(), 0, prot=PROT_READ)
+        map = f.read() # read into memory since we have issues when
+                       # mmap'd backing files are modified 
+                       # (e.g: by another process of simply by using `save()`)
 
       return Region(map, name=path)
