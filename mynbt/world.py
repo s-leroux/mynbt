@@ -1,6 +1,8 @@
 import os.path
+import glob
 
 from mynbt.region import Region
+from mynbt.nbt import TAG
 
 # ====================================================================
 # Locator
@@ -10,6 +12,7 @@ def Locator(dirname):
         level=lambda : os.path.join(dirname, 'level.dat'),
         raids=lambda : os.path.join(dirname, 'data', 'raids.dat'),
         region=lambda rx, rz : os.path.join(dirname, 'region', 'r.{}.{}.mca'.format(rx,rz)),
+        players=lambda : glob.glob(os.path.join(dirname, '*.dat'))
     ))
 
 # ====================================================================
@@ -47,3 +50,10 @@ class World:
         """
 
         raise NotImplementedError
+
+    def players(self):
+        """ Itertor over the player's data
+        """
+        for player in self._locator.players():
+            with TAG.parse_file(player) as p:
+                yield p

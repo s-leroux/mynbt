@@ -90,6 +90,10 @@ class TAG:
                 with reader(path, 'wb') as output:
                     self.write_to(output)
 
+            @property
+            def filepath(self):
+                return path
+
             def __enter__(self):
                 return self
 
@@ -255,7 +259,8 @@ class Node:
     def export(self, *, compact=True):
         if not compact:
             raise NotImplementedError
-        return self.visit(Exporter())
+        result, = self.visit(Exporter())
+        return result
 
     def value(self):
         return self
@@ -517,6 +522,9 @@ class CompoundNode(Node, collections.abc.MutableMapping, collections.abc.Hashabl
         return super().__repr__() + " {" +\
                 ", ".join(name + ": " + repr(item) for name, item in self._items.items()) +\
                 "}"
+
+    def __str__(self):
+        return str(self.export())
 
     #------------------------------------
     # Node interface

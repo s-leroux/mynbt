@@ -283,10 +283,10 @@ class TestExport(unittest.TestCase):
     def _test_export(self, data, expected):
           t, *_ = TAG.parse(data.BYTES)
 
-          x, = t.export()
+          x = t.export()
           self.assertEqual(x, expected)
 
-          x, = t.export(compact=True)
+          x = t.export(compact=True)
           self.assertEqual(x, expected)
     
     def _test_export_frame(self, frame, value):
@@ -322,6 +322,19 @@ class TestExport(unittest.TestCase):
 
     def test_export_long_array(self):
         self._test_export_frame(LONG_ARRAY_FRAME, [1,2,3,4,5,6,7])
+
+    def test_export_compound(self):
+        data = COMPOUND_FRAME(
+            SHORT_FRAME(123, name="short"),
+            STRING_FRAME("abc", name="string"),
+        )
+
+        expected = dict(
+            short=123,
+            string="abc",
+        )
+
+        self._test_export(data, expected)
 
     def test_walk_compound(self):
         t, name, _ = TAG.parse(SOME_NESTED_COMPOUND.BYTES, 0)

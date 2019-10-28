@@ -1,5 +1,6 @@
 import unittest
 import os.path
+from pprint import pprint
 
 import mynbt.world as world
 
@@ -42,3 +43,10 @@ class TestWorld(unittest.TestCase):
         nbt = chunk.parse()
         self.assertEqual(nbt.Level.xPos, -22)
         self.assertEqual(nbt.Level.zPos, -36)
+
+    def test_3(self):
+        """ World can iterate over players
+        """
+        # XXX How to test that exactly?
+        for player in self.world.players():
+            _ = (player.filepath, player.Data.Version, [player.Data.SpawnX, player.Data.SpawnY, player.Data.SpawnZ])

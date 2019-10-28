@@ -155,9 +155,11 @@ class Exporter(SmartVisitor):
 
     class Enter(SmartVisitor.Enter):
         def visitAtom(self):
-            self._visitor._top = Exporter.default_setter(self._name, self._node, self._visitor._top)
+            self._visitor._top = Exporter.default_setter(self._name, self._node.value(), self._visitor._top)
         def visitCompound(self):
             self._visitor._top = Exporter.dict_setter(self._name, self._node, self._visitor._top)
+        def visitList(self):
+            self._visitor._top = Exporter.list_setter(self._name, self._node, self._visitor._top)
         def visitArray(self):
             self._visitor._top = Exporter.list_setter(self._name, self._node, self._visitor._top)
     class Leave(SmartVisitor.Leave):
