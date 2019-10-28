@@ -20,7 +20,7 @@ import itertools
 
 from mynbt.nbt import TAG, EmptyChunkError
 from mynbt.error import *
-from mynbt.utils import hexdump
+from mynbt.utils import hexdump, patch, withsave
 
 PAGE_SIZE=4096
 """ Page-size (in bytes) in the region file
@@ -236,6 +236,9 @@ class Chunk:
     def write(self, nbt):
         self._region.write_chunk(self._x, self._z, nbt)
 
+    def kill(self):
+        self._region.kill_chunk(self._x, self._z)
+
     # data = property(
     #   lambda self: self._region.get_chunk(self._x, self._z),
     #   lambda self, data: self._region.set_chunk(self._x, self._z, data)
@@ -252,6 +255,7 @@ class Region:
       self._name = name or super().__str__()
       self._bitmap = None
       self._issues = []
+      self._version = 0
 
       # ensure the region file contains at least the 2-page header
       if len(data) < 2*PAGE_SIZE:
@@ -297,6 +301,7 @@ class Region:
     def invalidate(self):
         """ Invalidate cached data.
         """
+        self._version += 1
         self._bitmap = None
 
     #------------------------------------
@@ -517,4 +522,8 @@ class Region:
                        # mmap'd backing files are modified 
                        # (e.g: by another process of simply by using `save()`)
 
-      return Region(map, name=path)
+      result = Region(map, name=path)
+      old_version = result._version
+      patch(result, withsave(path, open, lambda: result._version > old_version))
+
+      return result

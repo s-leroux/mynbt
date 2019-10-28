@@ -6,6 +6,13 @@ from mynbt.region import *
 from test.data.region import *
 from test.data.nbt import *
 import mynbt.nbt as nbt
+import os.path
+import shutil
+
+FILE = {
+  'region-r.0.0.mca': os.path.join('test','data','region-r.0.0.mca'),
+  'region-copy.mca': os.path.join('test','tmp','region-copy.mca'),
+}
 
 class TestRegion(unittest.TestCase):
     def test_1(self):
@@ -155,7 +162,7 @@ class TestRegion(unittest.TestCase):
         self.assertEqual(nbt, 123)
 
     def test_region(self):
-        region = Region.fromFile("test/data/region-r.0.0.mca")
+        region = Region.fromFile(FILE["region-r.0.0.mca"])
         info = region.chunk_info(1,2)
         chunk = region.parse_chunk(1,2)
         # print(chunk.Level.Entities.export())
@@ -387,4 +394,50 @@ class TestChunks(unittest.TestCase):
 
         # with warnings.catch_warnings(record=True):
         #     for chunk in self.region.chunks():
-        #         print(chunk)
+
+class TestAutoSave(unittest.TestCase):
+    def setUp(self):
+        shutil.copy(FILE['region-r.0.0.mca'],FILE['region-copy.mca'])
+
+    def test_1(self):
+        """ Regions parsed from file can be saved
+            with their original name
+        """
+        region = Region.fromFile(FILE['region-copy.mca'])
+        chunk1 = next(region.chunks())
+        (x,z) = chunk1.x, chunk1.z
+        chunk1.kill()
+
+        region.save()
+
+        region = Region.fromFile(FILE['region-copy.mca'])
+        chunk1 = next(region.chunks())
+        self.assertNotEqual((chunk1.x, chunk1.z), (x,z))
+
+    def test_2(self):
+        """ Regions from file act as a context manager to save changes
+        """
+        with Region.fromFile(FILE['region-copy.mca']) as region:
+            chunk1 = next(region.chunks())
+            (x,z) = chunk1.x, chunk1.z
+            chunk1.kill()
+
+        with Region.fromFile(FILE['region-copy.mca']) as region:
+            chunk1 = next(region.chunks())
+            self.assertNotEqual((chunk1.x, chunk1.z), (x,z))
+
+    def test_3(self):
+        """ Context manager should not auto-save unmodified regions
+        """
+        with open(FILE['region-copy.mca'], 'rb') as f:
+            old_data = f.read()
+
+        with Region.fromFile(FILE['region-copy.mca']) as region:
+            chunk1 = next(region.chunks())
+            (x,z) = chunk1.x, chunk1.z
+
+        with open(FILE['region-copy.mca'], 'rb') as f:
+            new_data = f.read()
+        
+        self.assertEqual(old_data, new_data)
+
