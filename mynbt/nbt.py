@@ -7,6 +7,7 @@ import io
 
 from mynbt.visitor import Visitor, Exporter
 from mynbt.error import *
+from mynbt.utils import withsave
 
 # ====================================================================
 # Errors
@@ -85,26 +86,7 @@ class TAG:
         # In addition, the object behaves as a context manager
         # to save the file on exit
         old_version = result._version
-        class WithSave:
-            def save(self):
-                with reader(path, 'wb') as output:
-                    self.write_to(output)
-
-            @property
-            def filepath(self):
-                return path
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, exc_type, *args):
-                if exc_type is None and self._version > old_version:
-                    self.save()
-
-        cls = result.__class__
-        result.__class__ = type(cls.__name__, (cls, WithSave), {})
-        #
-        #
+        withsave(result, reader, path, lambda : result._version > old_version)
 
         return result
 

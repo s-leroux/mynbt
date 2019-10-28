@@ -41,3 +41,33 @@ def hexdump(data, maxlines=-1, compact=True):
         maxlines -= 1
         addr += 16
 
+
+def withsave(obj, writer, path, test=lambda : True):
+    """ Make `obj` a context manager with auto-save
+        on exit
+
+        `obj` must have a `write_to(output)` method
+    """
+    class WithSave:
+        def save(self):
+            with writer(path, 'wb') as output:
+                self.write_to(output)
+
+        @property
+        def filepath(self):
+            return path
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, *args):
+            if exc_type is None and test():
+                self.save()
+
+    cls = obj.__class__
+    obj.__class__ = type(cls.__name__, (cls, WithSave), {})
+    #
+    #
+
+    return obj
+
