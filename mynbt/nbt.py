@@ -7,7 +7,7 @@ import io
 
 from mynbt.visitor import Visitor, Exporter
 from mynbt.error import *
-from mynbt.utils import withsave
+from mynbt.utils import patch,withsave
 
 # ====================================================================
 # Errors
@@ -86,7 +86,7 @@ class TAG:
         # In addition, the object behaves as a context manager
         # to save the file on exit
         old_version = result._version
-        withsave(result, reader, path, lambda : result._version > old_version)
+        patch(result, withsave(path, reader, lambda : result._version > old_version))
 
         return result
 

@@ -42,12 +42,7 @@ def hexdump(data, maxlines=-1, compact=True):
         addr += 16
 
 
-def withsave(obj, writer, path, test=lambda : True):
-    """ Make `obj` a context manager with auto-save
-        on exit
-
-        `obj` must have a `write_to(output)` method
-    """
+def withsave(path, writer=open, test=lambda : True):
     class WithSave:
         def save(self):
             with writer(path, 'wb') as output:
@@ -64,8 +59,16 @@ def withsave(obj, writer, path, test=lambda : True):
             if exc_type is None and test():
                 self.save()
 
+    return WithSave
+
+
+def patch(obj, behavior):
+    """ Attach the given behavior to `obj`
+    
+        The behavior is assumed to be  class
+    """
     cls = obj.__class__
-    obj.__class__ = type(cls.__name__, (cls, WithSave), {})
+    obj.__class__ = type(cls.__name__, (cls, behavior), {})
     #
     #
 
