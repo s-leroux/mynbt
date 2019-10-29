@@ -586,3 +586,30 @@ class TestSave(unittest.TestCase):
             new_data = f.read()
 
         self.assertEqual(old_data, new_data)
+
+class TestClone(unittest.TestCase):
+    DATA = COMPOUND_FRAME(
+        WITH_NAME("data", COMPOUND_FRAME)(
+          SHORT_FRAME(123, "value"),
+        ),
+    )
+
+    def setUp(self):
+        self.nbt, *_ = TAG.parse(self.DATA)
+
+    def test_1(self):
+        """ Compound can be cloned
+        """
+        clone = self.nbt.clone()
+
+        self.assertIsNot(clone, self.nbt)
+        self.assertIs(clone.data['value'], self.nbt.data['value'])
+
+    def test_2(self):
+        """ Changing a value in a clone does not change the original
+        """
+        clone = self.nbt.clone()
+        clone.data['value'] = 456
+
+        self.assertEqual(clone.data['value'], 456)
+        self.assertEqual(self.nbt.data['value'], 123)

@@ -110,6 +110,15 @@ class Node:
         if parent is not None:
             self.register_parent(parent)
 
+    def clone(self, parent=None):
+        """ Clone the receiver.
+            Immutle values should return self
+        """
+        if parent:
+            self.register_parent(parent)
+
+        return self
+
     #------------------------------------
     # Managing ancestors chain
     #------------------------------------
@@ -296,14 +305,30 @@ class String(str, Value):
 
         return len(data).to_bytes(2, 'big') + data
 
+# ====================================================================
+# Arrays
+# ====================================================================
 class Array(Value):
-    def __init__(self, values, *, trait, payload = None, parent = None):
+    def __init__(self, *, trait, payload = None, parent = None):
         Node.__init__(self, trait = trait, payload = payload, parent = parent)
-        self._items = [Integer(v, trait=trait.TYPE, parent=self) for v, in values]
+        self._items = []
+
+    @classmethod
+    def fromValues(cls, values, *, trait, payload = None, parent = None):
+        instance = cls(trait=trait, payload=payload, parent=parent)
+        instance._items = [Integer(v, trait=trait.TYPE, parent=instance) for v, in values]
+        return instance
+
 
     #------------------------------------
     # Node interface
     #------------------------------------
+    def clone(self, parent=None):
+        instance = self.__class__(trait=self._trait, payload=self._payload, parent=parent)
+        instance._items = self._items.copy()
+
+        return instance
+
     def children(self):
         return enumerate(self._items)
 
@@ -397,7 +422,7 @@ class Proxy(Node):
         """ Return a value object corresponding to the payload
         """
         if self._value is None:
-            self._value = self._trait.VALUE(self.unpack(), trait=self._trait, payload=self._payload)
+            self._value = self._trait.FACTORY(self.unpack(), trait=self._trait, payload=self._payload)
 
         return self._value
 
@@ -422,6 +447,9 @@ class StringProxy(Proxy):
     def unpack(self):
         return bytes(self._payload[2:]).decode("utf8") # XXX unneeded (?) copy
 
+# ====================================================================
+# Composites
+# ====================================================================
 class ListNode(Node, collections.abc.MutableSequence, collections.abc.Hashable):
     def __init__(self, *, trait, payload, parent):
         self._items = []
@@ -435,6 +463,12 @@ class ListNode(Node, collections.abc.MutableSequence, collections.abc.Hashable):
     #------------------------------------
     # Node interface
     #------------------------------------
+    def clone(self, parent=None):
+        instance = self.__class__(trait=self._trait, payload=self._payload, parent=parent)
+        instance._items = [item.clone(parent=instance) for item in self._items]
+
+        return instance
+
     def children(self):
         return enumerate(self._items)
 
@@ -512,6 +546,12 @@ class CompoundNode(Node, collections.abc.MutableMapping, collections.abc.Hashabl
     #------------------------------------
     # Node interface
     #------------------------------------
+    def clone(self, parent=None):
+        instance = self.__class__(trait=self._trait, payload=self._payload, parent=parent)
+        instance._items = {k:v.clone(parent=instance) for k,v in self._items.items()}
+
+        return instance
+
     def children(self):
         return sorted(self._items.items())
 
@@ -566,7 +606,7 @@ class CompoundNode(Node, collections.abc.MutableMapping, collections.abc.Hashabl
             # otherwise a compatible type is inferred
             old = self._items.get(idx)
             trait = old._trait if old is not None else TYPE_TO_TRAIT[type(value)]
-            value = trait.VALUE(value, trait=trait)
+            value = trait.FACTORY(value, trait=trait)
 
         value.register_parent(self)
         self._items[idx] = value
@@ -708,7 +748,7 @@ class AtomTrait(Trait):
 class ArrayTrait(Trait):
     READER = ArrayReader
     VISIT = 'visitArray'
-    VALUE = Array
+    FACTORY = Array.fromValues
 
 class EndTrait(Trait):
     ID = 0
@@ -719,42 +759,42 @@ class ByteTrait(AtomTrait):
     ID = 1
     SIZE = 1
     FORMAT = ">b"
-    VALUE = Integer
+    FACTORY = Integer
     VISIT = 'visitByte'
 
 class ShortTrait(AtomTrait):
     ID = 2
     SIZE = 2
     FORMAT = ">h"
-    VALUE = Integer
+    FACTORY = Integer
     VISIT = 'visitShort'
 
 class IntTrait(AtomTrait):
     ID = 3
     SIZE = 4
     FORMAT = ">i"
-    VALUE = Integer
+    FACTORY = Integer
     VISIT = 'visitInt'
 
 class LongTrait(AtomTrait):
     ID = 4
     SIZE = 8
     FORMAT = ">q"
-    VALUE = Integer
+    FACTORY = Integer
     VISIT = 'visitLong'
 
 class FloatTrait(AtomTrait):
     ID = 5
     SIZE = 4
     FORMAT = ">f"
-    VALUE = Float
+    FACTORY = Float
     VISIT = 'visitFloat'
 
 class DoubleTrait(AtomTrait):
     ID = 6
     SIZE = 8
     FORMAT = ">d"
-    VALUE = Float
+    FACTORY = Float
     VISIT = 'visitDouble'
 
 class ByteArrayTrait(ArrayTrait):
@@ -780,7 +820,7 @@ class LongArrayTrait(ArrayTrait):
 
 class StringTrait(Trait):
     ID = 8
-    VALUE = String
+    FACTORY = String
     READER = StringReader
     VISIT = 'visitString'
 
