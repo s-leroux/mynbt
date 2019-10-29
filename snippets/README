@@ -1,0 +1,13 @@
+Snippets showing how to achieve practical tasks with 
+the `mynbt` library
+
+Code samples  are assumed to be run from the root nbt forlder:
+
+   python3 snippets/copy-chunk.py
+
+To reduce boilerplate code and keep examples straight to
+the point, snippets do not handle command line arguments
+nor any other form of configuration.
+
+All changes should be done by modifying the code.  Check the
+individual source files for more infos

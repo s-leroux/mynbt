@@ -1,0 +1,29 @@
+SAMPLE FILES
+============
+
+* region-r.0.0.mca
+  A valid Minecraft 1.13 region file
+
+* broken-r.-1.-1.mca
+  A genuinely broken Minecraft region file with multiple header
+  entries pointing to the same chunk (potentially with other issues)
+
+      DuplicatePage: Page 1168 of test/data/broken-r.-1.-1.mca is used by multiple chunks: ((28, 8), (17, 14))
+      DuplicatePage: Page 1297 of test/data/broken-r.-1.-1.mca is used by multiple chunks: ((22, 6), (22, 9))
+      DuplicatePage: Page 1298 of test/data/broken-r.-1.-1.mca is used by multiple chunks: ((22, 6), (22, 9))
+
+  The file was presumably corrupted because there was no space
+  left on the device wile saving the world
+
+* level.dat
+  A valid level.dat file
+
+* poi-r.0.0.mca
+  A valid POI file
+
+* servers.dat
+  A downloaded, presumably valid, server.dat with a large list
+  of public servers
+
+* MC-1_14_4-World
+  A Minecraft 1.14.4 clean new world 

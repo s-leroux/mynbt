@@ -1,54 +1,76 @@
-def rslice(base, start, stop):
-    return Slice(base, start, stop)
+hexdump_map_hex = tuple( format(i, '02x') for i in range(256) )
+hexdump_map_txt = "".join(("."*32, *(chr(i) for i in range(32,127)), "."*129))
 
-class Slice:
-    def __init__(self, base, start, stop):
-        if start is None:
-            start = 0
-        elif start < 0:
-            start += len(base)
-        if stop is None:
-            stop = len(base)
-        elif stop < 0:
-            stop += len(base)
+def hexdump(data, maxlines=-1, compact=True):
+    """ Produce an hex/ascii dump of the data
+    """
+    def _dumpline(line):
+        pass
 
-        if stop > len(base):
-            stop = len(base)
+    data = memoryview(data)
+    addr = 0
+    previous = ""
+    starred = False
+    while maxlines != 0:
+        if not data:
+            if starred:
+                yield previous
+            break
 
-        if start > stop:
-            start = stop
+        line, data = data[:16], data[16:]
 
-        self.base = base
-        self.start = start
-        self.stop = stop
+        hex = " ".join(hexdump_map_hex[b] for b in line)
+        ascii = "".join(hexdump_map_txt[b] for b in line)
 
-    def __repr__(self):
-        return "Slice({base},{start},{stop})".format(**self.__dict__)
+        line = "{:06x}    {:50s} |{:8s}|".format(addr, hex, ascii)
+        if not compact or maxlines==1:
+            yield line
+        else:
+            if line[6:] == previous[6:]:
+                if not starred:
+                    starred = True
+                    yield '*'
+            else:
+                if starred and previous:
+                    yield previous
 
-    def __len__(self):
-        return self.stop-self.start
+                starred = False
+                yield line
 
-    def __eq__(self,other):
-        if type(other) is Slice:
-            other = [*other]
+        previous = line
+        maxlines -= 1
+        addr += 16
 
-        if type(other) is list:
-            return [*self] == other
 
-        return super().__eq__(other)
+def withsave(path, writer=open, test=lambda : True):
+    class WithSave:
+        def save(self):
+            with writer(path, 'wb') as output:
+                self.write_to(output)
 
-    def __getitem__(self,idx):
-        if type(idx) is int:
-            idx += self.start if idx >= 0 else self.stop
-            if idx >= self.stop or idx < self.start:
-                raise IndexError
-            
-            return self.base[idx]
-        elif type(idx) is slice:
-            if idx.step is not None:
-                raise TypeError("step slices are not supported")
-            return Slice(self.base,
-                    idx.start + (self.start if idx.start >= 0 else self.stop),
-                    idx.stop + (self.start if idx.stop >= 0 else self.stop))
-                        
+        @property
+        def filepath(self):
+            return path
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, *args):
+            if exc_type is None and test():
+                self.save()
+
+    return WithSave
+
+
+def patch(obj, behavior):
+    """ Attach the given behavior to `obj`
+    
+        The behavior is assumed to be  class
+    """
+    cls = obj.__class__
+    obj.__class__ = type(cls.__name__, (cls, behavior), {})
+    #
+    #
+
+    return obj
 
