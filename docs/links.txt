@@ -1,0 +1,5 @@
+https://wiki.vg/NBT#Specification
+https://minecraft.gamepedia.com/NBT_format#File_Format
+https://minecraft.gamepedia.com/Chunk_format
+https://minecraft.gamepedia.com/Level_format#level.dat_format
+https://wiki.vg/Region_Files
