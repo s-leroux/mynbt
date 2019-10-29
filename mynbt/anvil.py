@@ -243,8 +243,8 @@ class Chunk:
         self._region.kill_chunk(self._x, self._z)
 
     # data = property(
-    #   lambda self: self._region.get_chunk(self._x, self._z),
-    #   lambda self, data: self._region.set_chunk(self._x, self._z, data)
+    #   lambda self: self._region.get_chunk_data(self._x, self._z),
+    #   lambda self, data: self._region.set_chunk_data(self._x, self._z, data)
     # )
 
 # ====================================================================
@@ -448,12 +448,12 @@ class Anvil:
         idx = z*32+x
         self._chunks[idx] = ChunkInfo(addr, size, timestamp, x, z, dump)
 
-    def get_chunk(self, x, z):
+    def get_chunk_data(self, x, z):
         """ Return the chunk raw data
         """
         return self.chunk_info(x,z).data
 
-    def set_chunk(self, x, z, data, timestamp=None):
+    def set_chunk_data(self, x, z, data, timestamp=None):
         """ Set chunk raw data.
             No validation is performed to check if
             the data are valid.
@@ -470,20 +470,32 @@ class Anvil:
         self.set_chunk_info(EMPTY_CHUNK(x,z))
 
     def copy_chunk(self, from_x, from_z, to_x, to_z):
-        """ Shorthand for set_chunk(...,get_chunk(...))
+        """ Shorthand for set_chunk_data(...,get_chunk_data(...))
         """
-        self.set_chunk(to_x, to_z, self.get_chunk(from_x, from_z))
+        self.set_chunk_data(to_x, to_z, self.get_chunk_data(from_x, from_z))
 
     #------------------------------------
     # Chunk iterator & context manager
     #------------------------------------
-    def chunk(self, x, z):
+    class ChunkAccessor:
+        def __init__(self, region):
+            self.region = region
+
+        def __getitem__(self, idx):
+            return Chunk(self.region, *idx)
+
+        def __setitem__(self, idx, chunk):
+            self.region.set_chunk_data(*idx, chunk.data)
+
+    chunk = property(ChunkAccessor)
+
+    def get_chunk(self, x, z):
         return Chunk(self, x, z)
 
     def chunks(self, filter=lambda region, info : len(info.data) and region.is_valid_chunk(info)):
         for chunk in self._chunks:
             if filter(self, chunk):
-                yield self.chunk(chunk.x, chunk.z)
+                yield self.chunk[chunk.x, chunk.z]
 
     #------------------------------------
     # I/O

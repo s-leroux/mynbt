@@ -31,7 +31,7 @@ class TestWorld(unittest.TestCase):
         region = self.world.region(rx,rz)
         self.assertIsNotNone(region)
 
-        chunk = region.chunk(cx,cz)
+        chunk = region.chunk[cx,cz]
         nbt = chunk.parse()
         self.assertEqual(nbt.Level.xPos, rx*32+cx)
         self.assertEqual(nbt.Level.zPos, rz*32+cz)

@@ -1,8 +1,17 @@
+import os
 import os.path
 import glob
 
 from mynbt.region import Region
 from mynbt.nbt import TAG
+
+# ====================================================================
+# Constants
+# ====================================================================
+SAVES_FOLDER="saves"
+
+# XXX The MINECRAFT_HOME default value should be platform dependent XXX
+MINECRAFT_HOME=os.getenv("MINECRAFT_HOME") or os.path.join(os.path.expanduser("~"), ".minecraft")
 
 # ====================================================================
 # Locator
@@ -25,6 +34,21 @@ class World:
         self._dirname = dirname
         self._locator = Locator(dirname)
 
+    @staticmethod
+    def fromSaveFolder(minecrafthome, worldname):
+        """ Factory method to open a world from the `saves`
+            folder of the given MC directory
+        """
+        return World(os.path.join(minecrafthome, SAVE_FOLDER, worldname))
+
+    @staticmethod
+    def fromStandardSaveFolder(worldname):
+        """ Factory method to open a world from the `saves`
+            folder of the Minecraft directory at the standard
+            location
+        """
+        return World.fromSaveFolder(MINECRAFT_HOME, worldname)
+
     def region(self, rx, rz):
         return Region.fromFile(self._locator.region(rx,rz))
 
@@ -41,7 +65,7 @@ class World:
         rx,cx = divmod(cx,32)
         rz,cz = divmod(cz,32)
 
-        return self.region(rx,rz).chunk(cx,cz)
+        return self.region(rx,rz).chunk[cx,cz]
 
     def chunks(self, cx_range, cz_range):
         """ Iterator over the chunks in the range

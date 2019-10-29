@@ -97,7 +97,7 @@ class TestAnvil(unittest.TestCase):
           CHUNK(3,4,pageaddr=5,pagecount=2,data=data),
         ))
 
-        content = region.get_chunk(3,4)
+        content = region.get_chunk_data(3,4)
         self.assertTrue(bytes(content).startswith(data))
         self.assertTrue(len(content)%PAGE_SIZE == 0)
 
@@ -110,12 +110,18 @@ class TestAnvil(unittest.TestCase):
         ))
 
         region.copy_chunk(3,4,5,6)
-        content = region.get_chunk(3,4)
+        content = region.get_chunk_data(3,4)
         self.assertTrue(bytes(content).startswith(data))
         self.assertTrue(len(content)%PAGE_SIZE == 0)
-        content = region.get_chunk(5,6)
+        content = region.get_chunk_data(5,6)
         self.assertTrue(bytes(content).startswith(data))
         self.assertTrue(len(content)%PAGE_SIZE == 0)
+
+    def test_chunk_accessor(self):
+        region = Anvil()
+
+        chunk_accessor = region.chunk
+        self.assertIsInstance(chunk_accessor, Anvil.ChunkAccessor)
 
     def test_bytes_to_chunk_addr(self):
         addr = bytes_to_chunk_addr(bytes.fromhex("102030405060"), 0)
@@ -176,7 +182,7 @@ class TestAnvil(unittest.TestCase):
             )
           )),
         ))
-        with region.chunk(1,2).parse() as nbt:
+        with region.chunk[1,2].parse() as nbt:
             nbt.data = 12
 
         self.assertEqual(region.parse_chunk(1,2).data, 12)
@@ -236,7 +242,7 @@ class TestAnvilEdgeCases(unittest.TestCase):
             return None
         """
         with self.assertRaises(EmptyChunkError) as cm:
-            with self.root.chunk(5,5).parse() as nbt:
+            with self.root.chunk[5,5].parse() as nbt:
                 self.assertIsNone(nbt)
 
     def test_3(self):
@@ -321,8 +327,8 @@ class TestInterAnvil(unittest.TestCase):
         """ Chunk raw data overwrite chunks in another region
         """
 
-        chunk = self.r1.get_chunk(1,2)
-        self.r2.set_chunk(1,2,chunk)
+        chunk = self.r1.get_chunk_data(1,2)
+        self.r2.set_chunk_data(1,2,chunk)
 
         nbt = self.r2.parse_chunk(1,2)
         self.assertEqual(nbt.r1d1.a, 12)
@@ -331,8 +337,8 @@ class TestInterAnvil(unittest.TestCase):
         """ Chunk raw data can be copied between regions
         """
 
-        chunk = self.r1.get_chunk(1,2)
-        self.r2.set_chunk(3,4,chunk)
+        chunk = self.r1.get_chunk_data(1,2)
+        self.r2.set_chunk_data(3,4,chunk)
 
         nbt = self.r2.parse_chunk(3,4)
         self.assertEqual(nbt.r1d1.a, 12)
@@ -341,8 +347,8 @@ class TestInterAnvil(unittest.TestCase):
         """ Context managers can be used to copy data between
             regions
         """
-        with self.r1.chunk(1,2).parse() as nbt1:
-            with self.r2.chunk(3,4).parse() as nbt2:
+        with self.r1.chunk[1,2].parse() as nbt1:
+            with self.r2.chunk[3,4].parse() as nbt2:
                 nbt1.r1d1 = nbt2.r2d2
 
         result = self.r1.parse_chunk(1,2)
@@ -376,8 +382,8 @@ class TestChunks(unittest.TestCase):
 
     def setUp(self):
         self.region = Anvil(self.R)
-        self.region.set_chunk(3,5, bytes.fromhex(CHUNK_DATA(STRING_FRAME("Updated chunk 3,5"))))
-        self.region.set_chunk(6,6, b"** BAD CHUNK **")
+        self.region.set_chunk_data(3,5, bytes.fromhex(CHUNK_DATA(STRING_FRAME("Updated chunk 3,5"))))
+        self.region.set_chunk_data(6,6, b"** BAD CHUNK **")
         self.region.kill_chunk(6,7)
 
 
