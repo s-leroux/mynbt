@@ -19,15 +19,15 @@ class TestRegion(unittest.TestCase):
         """ Region without data should have all chunks empty
         """
         region = Region()
-        chunks = [region.chunk_info(x,y) for x in range(32) for y in range(32)]
-        self.assertSequenceEqual(chunks, [EMPTY_CHUNK]*32*32)
+        chunks = [region.chunk_info(x,z) for z in range(32) for x in range(32)]
+        self.assertSequenceEqual(chunks, EMPTY_CHUNKS)
 
     def test_2(self):
         """ Region with incomplete headers should be silently fixed
         """
         region = Region(b"\x00"*(PAGE_SIZE//2))
-        chunks = [region.chunk_info(x,y) for x in range(32) for y in range(32)]
-        self.assertSequenceEqual(chunks, [EMPTY_CHUNK]*32*32)
+        chunks = [region.chunk_info(x,z) for z in range(32) for x in range(32)]
+        self.assertSequenceEqual(chunks, EMPTY_CHUNKS)
 
     def test_3(self):
         """ Missing data are filled with zero bytes
@@ -130,7 +130,7 @@ class TestRegion(unittest.TestCase):
         #self.assertEqual(bytes(region._timestamps), bytes(4096))
         #self.assertEqual(region._eof, 2*4096)
 
-        self.assertEqual(region.chunk_info(1,2), (None, None, 0, 0, 0, b""))
+        self.assertEqual(region.chunk_info(1,2), (None, None, 0, 1, 2, b""))
 
     def test_write_chunk(self):
         region = Region()

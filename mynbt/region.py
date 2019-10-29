@@ -31,8 +31,11 @@ EMPTY_PAGE = bytes(PAGE_SIZE)
 """
 
 ChunkInfo = namedtuple('ChunkInfo', ['addr', 'size', 'timestamp', 'x', 'z', 'data'])
-EMPTY_CHUNK = ChunkInfo(None,None,0,0,0,EMPTY_PAGE[0:0])
-
+def EMPTY_CHUNK(x,z):
+    return ChunkInfo(None,None,0,x,z,EMPTY_PAGE[0:0])
+EMPTY_CHUNKS = tuple(
+    EMPTY_CHUNK(x,z) for z in range(32) for x in range(32)
+)
 
 #
 # XXX Avoid module's global namespace polution by defining the
@@ -268,10 +271,12 @@ class Region:
       locations=view[0:PAGE_SIZE].cast('i')
       timestamps=view[PAGE_SIZE:2*PAGE_SIZE].cast('i')
 
-      self._chunks = [EMPTY_CHUNK]*1024
+      self._chunks = list(EMPTY_CHUNKS)
 
       for i in range(1024):
         z, x = divmod(i, 32)
+        assert self._chunks[i].x == x
+        assert self._chunks[i].z == z
         location = int.from_bytes(locations[i:][:1], 'big')
         if location != 0:
             issues = []
@@ -463,7 +468,7 @@ class Region:
     def kill_chunk(self, x, z):
         """ Remove a chunk
         """
-        self.set_chunk_info(x,z,EMPTY_CHUNK)
+        self.set_chunk_info(x,z,EMPTY_CHUNK(x,z))
 
     def copy_chunk(self, from_x, from_z, to_x, to_z):
         """ Shorthand for set_chunk(...,get_chunk(...))
@@ -519,7 +524,7 @@ class Region:
     def fromFile(path):
       with open(path, 'rb') as f:
         map = f.read() # read into memory since we have issues when
-                       # mmap'd backing files are modified 
+                       # mmap'd backing files are modified
                        # (e.g: by another process of simply by using `save()`)
 
       result = Region(map, name=path)
