@@ -192,18 +192,20 @@ def parse_chunk_header(chunk_data):
 # Chunk
 # ====================================================================
 class Chunk:
-    """ Act as proxy to a chunk
+    """ Store n individual chunk
     """
-    def __init__(self, region, x, z):
+    def __init__(self, region, chunk_info):
         self._region = region
-        self._x = x
-        self._z = z
+        self._chunk = chunk_info
+        self._x = chunk_info.x
+        self._z = chunk_info.z
 
     def __str__(self):
         return "Chunk({x},{z})".format(x=self.x, z=self.z)
 
     x = property(lambda self: self._x)
     z = property(lambda self: self._z)
+    data = property(lambda self: self._chunk.data)
 
     def parse(self):
         """ Parse the chuck and returns the corresponding
@@ -211,7 +213,7 @@ class Chunk:
             to update the chunk on exit
         """
         chunk = self
-        nbt = self._region.parse_chunk(self._x, self._z)
+        nbt = self._region.parse_chunk_info(self._chunk)
         if not nbt:
             raise EmptyChunkError(self._region, self._x, self._z)
 
@@ -408,7 +410,9 @@ class Anvil:
             self.track(BadChunkHeader(chunk_info))
 
     def parse_chunk(self, x, z):
-      chunk_info = self.chunk_info(x,z)
+      return self.parse_chunk_info(self.chunk_info(x,z))
+
+    def parse_chunk_info(self, chunk_info):
       length, decompressor, data = self.parse_chunk_header(chunk_info)
       if length == 0:
           return None
@@ -418,7 +422,7 @@ class Anvil:
       try:
           lx = nbt.Level.xPos
           lz = nbt.Level.zPos
-          if (x,z) != (lx%32,lz%32):
+          if (chunk_info.x,chunk_info.z) != (lx%32,lz%32):
             self.track(InconsistentLocation(self, nbt, chunk_info, (lx,lz)))
 
       except (AttributeError, KeyError):
@@ -482,7 +486,7 @@ class Anvil:
             self.region = region
 
         def __getitem__(self, idx):
-            return Chunk(self.region, *idx)
+            return Chunk(self.region, self.region.chunk_info(*idx))
 
         def __setitem__(self, idx, chunk):
             self.region.set_chunk_data(*idx, chunk.data)

@@ -167,6 +167,37 @@ class TestAnvil(unittest.TestCase):
         nbt = region.parse_chunk(1,2)
         self.assertEqual(nbt, 123)
 
+    def test_copy_chunk(self):
+        region = Anvil(REGION(10*PAGE_SIZE,
+          CHUNK(1,2,pageaddr=4,pagecount=2,data=CHUNK_DATA(
+            SHORT_FRAME(123)
+          )),
+        ))
+        region.chunk[2,3] = region.chunk[1,2]
+
+        nbt = region.parse_chunk(1,2)
+        self.assertEqual(nbt, 123)
+
+        nbt = region.parse_chunk(2,3)
+        self.assertEqual(nbt, 123)
+
+    def test_swap_chunk(self):
+        region = Anvil(REGION(10*PAGE_SIZE,
+          CHUNK(2,3,pageaddr=4,pagecount=2,data=CHUNK_DATA(
+            STRING_FRAME("23")
+          )),
+          CHUNK(1,2,pageaddr=5,pagecount=2,data=CHUNK_DATA(
+            SHORT_FRAME(12)
+          )),
+        ))
+        region.chunk[2,3], region.chunk[1,2] = region.chunk[1,2], region.chunk[2,3]
+
+        nbt = region.parse_chunk(1,2)
+        self.assertEqual(nbt, "23")
+
+        nbt = region.parse_chunk(2,3)
+        self.assertEqual(nbt, 12)
+
     def test_region(self):
         region = Anvil.fromFile(FILE["region-r.0.0.mca"])
         info = region.chunk_info(1,2)
