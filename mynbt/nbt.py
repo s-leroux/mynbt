@@ -2,6 +2,7 @@ import gzip
 from struct import pack, unpack, iter_unpack
 from weakref import WeakSet
 import collections
+from collections.abc import Hashable, MutableSequence
 
 import io
 
