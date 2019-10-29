@@ -39,7 +39,7 @@ class World:
         """ Factory method to open a world from the `saves`
             folder of the given MC directory
         """
-        return World(os.path.join(minecrafthome, SAVE_FOLDER, worldname))
+        return World(os.path.join(minecrafthome, SAVES_FOLDER, worldname))
 
     @staticmethod
     def fromStandardSaveFolder(worldname):
