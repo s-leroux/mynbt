@@ -363,9 +363,9 @@ class Region:
         idx = chunk_to_index(x,z)
         return self._chunks[idx]
 
-    def set_chunk_info(self, x, z, info):
+    def set_chunk_info(self, info):
         self.invalidate()
-        idx = chunk_to_index(x,z)
+        idx = chunk_to_index(info.x,info.z)
         self._chunks[idx] = info
 
     #------------------------------------
@@ -458,17 +458,16 @@ class Region:
             No validation is performed to check if
             the data are valid.
         """
-        self.invalidate()
         timestamp = timestamp or int(time())
 
-        idx = chunk_to_index(x,z)
-        self._chunks[idx] = ci = ChunkInfo(None, None, timestamp, x, z, data)
+        ci = ChunkInfo(None, None, timestamp, x, z, data)
+        self.set_chunk_info(ci)
         return ci
 
     def kill_chunk(self, x, z):
         """ Remove a chunk
         """
-        self.set_chunk_info(x,z,EMPTY_CHUNK(x,z))
+        self.set_chunk_info(EMPTY_CHUNK(x,z))
 
     def copy_chunk(self, from_x, from_z, to_x, to_z):
         """ Shorthand for set_chunk(...,get_chunk(...))
