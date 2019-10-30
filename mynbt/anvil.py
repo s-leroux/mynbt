@@ -192,7 +192,7 @@ def parse_chunk_header(chunk_data):
 # Chunk
 # ====================================================================
 class Chunk:
-    """ Store n individual chunk
+    """ Store an individual chunk
     """
     def __init__(self, region, chunk_info):
         self._region = region
@@ -378,7 +378,6 @@ class Anvil:
             its logical size, suitable decompressor,
             and data to decompress
         """
-        *_, mem = chunk_info
         length, compression, data = parse_chunk_header(chunk_info.data)
 
         if length == 0:
@@ -390,7 +389,7 @@ class Anvil:
 
         if length > len(data):
             # fix missing data
-            mem = bytes(data).ljust(length)
+            data = bytes(data).ljust(length)
             self.track(MissingData(chunk_info))
 
         try:
@@ -430,13 +429,13 @@ class Anvil:
 
       return nbt
 
-    def write_chunk(self, x, z, nbt, *, compression=ZLIB):
+    def write_chunk(self, x, z, nbt, *, compression=ZLIB, timestamp=None):
         self.invalidate()
 
         assert_in_range(x, 0, 32, 'x')
         assert_in_range(z, 0, 32, 'z')
 
-        chunk_info = self.chunk_info(x,z)
+        #chunk_info = self.chunk_info(x,z)
 
         data = io.BytesIO()
         nbt.write_to(data)
@@ -447,10 +446,11 @@ class Anvil:
         dump = logical_size.to_bytes(4, 'big') + compression + dump
 
         size = addr = None
-        timestamp = int(time())
+        timestamp = timestamp or int(time())
 
         idx = z*32+x
-        self._chunks[idx] = ChunkInfo(addr, size, timestamp, x, z, dump)
+        self._chunks[idx] = ci = ChunkInfo(addr, size, timestamp, x, z, dump)
+        return ci
 
     def get_chunk_data(self, x, z):
         """ Return the chunk raw data
@@ -459,14 +459,23 @@ class Anvil:
 
     def set_chunk_data(self, x, z, data, timestamp=None):
         """ Set chunk raw data.
-            No validation is performed to check if
-            the data are valid.
+            The default implementation does not perform any
+            data validation.
         """
         timestamp = timestamp or int(time())
 
         ci = ChunkInfo(None, None, timestamp, x, z, data)
-        self.set_chunk_info(ci)
-        return ci
+
+        return self.set_chunk(ci)
+
+    def set_chunk(self, chunk_info):
+        """ update a chunk
+
+            Subclasses will probably need to parse the raw data
+            to adjust them, and then forward the call to write_chunk()
+        """
+        self.set_chunk_info(chunk_info)
+        return chunk_info
 
     def kill_chunk(self, x, z):
         """ Remove a chunk
