@@ -50,7 +50,7 @@ class World:
         return World.fromSaveFolder(MINECRAFT_HOME, worldname)
 
     def region(self, rx, rz):
-        return Region.fromFile(self._locator.region(rx,rz))
+        return Region.fromFile(rx, rz, self._locator.region(rx,rz))
 
     def chunk(self, cx, cz):
         """ Get a chunk

@@ -8,6 +8,10 @@ class Region(Anvil):
         self._rx = rx
         self._rz = rz
 
+    @classmethod
+    def fromFile(cls, rx, rz, path):
+        return super().fromFile(path, factory=lambda *args, **kwargs : Region(rx,rz,*args,**kwargs))
+
     def set_chunk(self, ci):
         nbt = self.parse_chunk_info(ci)
 

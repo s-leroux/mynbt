@@ -544,14 +544,14 @@ class Anvil:
             if pad > 0:
                 output.write(EMPTY_PAGE[pad:])
 
-    @staticmethod
-    def fromFile(path):
+    @classmethod
+    def fromFile(cls, path, *, factory=None):
       with open(path, 'rb') as f:
         map = f.read() # read into memory since we have issues when
                        # mmap'd backing files are modified
                        # (e.g: by another process of simply by using `save()`)
 
-      result = Anvil(map, name=path)
+      result = (factory or cls)(map, name=path)
       old_version = result._version
       patch(result, withsave(path, open, lambda: result._version > old_version))
 
