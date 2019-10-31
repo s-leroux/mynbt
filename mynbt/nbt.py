@@ -460,6 +460,9 @@ class ListNode(Node, collections.abc.MutableSequence, collections.abc.Hashable):
                 ", ".join(repr(item) for item in self._items) +\
                 "}"
 
+    def __str__(self):
+        return str(self.export())
+
     #------------------------------------
     # Node interface
     #------------------------------------
