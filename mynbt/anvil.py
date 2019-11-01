@@ -203,6 +203,7 @@ class Chunk:
     x = property(lambda self: self._x)
     z = property(lambda self: self._z)
     data = property(lambda self: self._chunk.data)
+    chunk_info = property(lambda self: self._chunk)
 
     def parse(self):
         """ Parse the chuck and returns the corresponding
@@ -451,11 +452,6 @@ class Anvil:
         self._chunks[idx] = ci = ChunkInfo(addr, size, timestamp, self._rx, self._rz, x, z, dump)
         return ci
 
-    def get_chunk_data(self, x, z):
-        """ Return the chunk raw data
-        """
-        return self.chunk_info(x,z).data
-
     def set_chunk_data(self, x, z, data, timestamp=None):
         """ Set chunk raw data.
             The default implementation does not perform any
@@ -465,14 +461,22 @@ class Anvil:
 
         ci = ChunkInfo(None, None, timestamp, self._rx, self._rz, x, z, data)
 
-        return self.set_chunk(ci)
+        return self.set_chunk(x, z, ci)
 
-    def set_chunk(self, chunk_info):
-        """ update a chunk
+    def set_chunk(self, x, z, chunk_info):
+        """ Attach a chunk to a region
 
             Subclasses will probably need to parse the raw data
             to adjust them, and then forward the call to write_chunk()
         """
+        chunk_info = ChunkInfo(None,
+                               None,
+                               chunk_info.timestamp,
+                               self._rx,
+                               self._rz,
+                               x,
+                               z,
+                               chunk_info.data)
         self.set_chunk_info(chunk_info)
         return chunk_info
 
@@ -484,7 +488,7 @@ class Anvil:
     def copy_chunk(self, from_x, from_z, to_x, to_z):
         """ Shorthand for set_chunk_data(...,get_chunk_data(...))
         """
-        self.set_chunk_data(to_x, to_z, self.get_chunk_data(from_x, from_z))
+        self.set_chunk(to_x, to_z, self.chunk_info(from_x, from_z))
 
     #------------------------------------
     # Chunk iterator & context manager
@@ -497,12 +501,12 @@ class Anvil:
             return Chunk(self.region, self.region.chunk_info(*idx))
 
         def __setitem__(self, idx, chunk):
-            self.region.set_chunk_data(*idx, chunk.data)
+            self.region.set_chunk(*idx, chunk.chunk_info)
 
     chunk = property(ChunkAccessor)
 
     def get_chunk(self, x, z):
-        return Chunk(self, x, z)
+        return Chunk(self, self.chunk_info(x, z))
 
     def chunks(self, filter=lambda region, info : len(info.data) and region.is_valid_chunk(info)):
         for chunk in self._chunks:

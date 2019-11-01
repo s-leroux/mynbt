@@ -22,7 +22,7 @@ class Region(Anvil):
 
         return super().write_chunk(x, z, nbt, timestamp=timestamp)
 
-    def set_chunk(self, ci):
+    def set_chunk(self, x, z, ci):
         nbt = self.parse_chunk_info(ci)
-        return self.write_chunk(ci.x, ci.z, nbt, timestamp=ci.timestamp)
+        return self.write_chunk(x, z, nbt, timestamp=ci.timestamp)
 

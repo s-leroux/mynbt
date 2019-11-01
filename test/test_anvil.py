@@ -99,9 +99,9 @@ class TestAnvil(unittest.TestCase):
           CHUNK(3,4,pageaddr=5,pagecount=2,data=data),
         ))
 
-        content = region.get_chunk_data(3,4)
-        self.assertTrue(bytes(content).startswith(data))
-        self.assertTrue(len(content)%PAGE_SIZE == 0)
+        content = region.get_chunk(3,4)
+        self.assertTrue(bytes(content.data).startswith(data))
+        self.assertTrue(len(content.data)%PAGE_SIZE == 0)
 
     def test_8(self):
         """ Anvil files can copy raw chunk data
@@ -112,12 +112,12 @@ class TestAnvil(unittest.TestCase):
         ))
 
         region.copy_chunk(3,4,5,6)
-        content = region.get_chunk_data(3,4)
-        self.assertTrue(bytes(content).startswith(data))
-        self.assertTrue(len(content)%PAGE_SIZE == 0)
-        content = region.get_chunk_data(5,6)
-        self.assertTrue(bytes(content).startswith(data))
-        self.assertTrue(len(content)%PAGE_SIZE == 0)
+        content = region.chunk_info(3,4)
+        self.assertTrue(bytes(content.data).startswith(data))
+        self.assertTrue(len(content.data)%PAGE_SIZE == 0)
+        content = region.chunk_info(5,6)
+        self.assertTrue(bytes(content.data).startswith(data))
+        self.assertTrue(len(content.data)%PAGE_SIZE == 0)
 
     def test_chunk_accessor(self):
         region = Anvil(0,0)
@@ -360,8 +360,8 @@ class TestInterAnvil(unittest.TestCase):
         """ Chunk raw data overwrite chunks in another region
         """
 
-        chunk = self.r1.get_chunk_data(1,2)
-        self.r2.set_chunk_data(1,2,chunk)
+        chunk = self.r1.chunk_info(1,2)
+        self.r2.set_chunk(1,2,chunk)
 
         nbt = self.r2.parse_chunk(1,2)
         self.assertEqual(nbt.r1d1.a, 12)
@@ -370,8 +370,8 @@ class TestInterAnvil(unittest.TestCase):
         """ Chunk raw data can be copied between regions
         """
 
-        chunk = self.r1.get_chunk_data(1,2)
-        self.r2.set_chunk_data(3,4,chunk)
+        chunk = self.r1.chunk_info(1,2)
+        self.r2.set_chunk(3,4,chunk)
 
         nbt = self.r2.parse_chunk(3,4)
         self.assertEqual(nbt.r1d1.a, 12)
