@@ -451,8 +451,9 @@ class StringProxy(Proxy):
 # Composites
 # ====================================================================
 class ListNode(Node, collections.abc.MutableSequence, collections.abc.Hashable):
-    def __init__(self, *, trait, payload, parent):
+    def __init__(self, *, trait, child_trait, payload, parent):
         self._items = []
+        self._child_trait = child_trait
         super().__init__(trait=trait, payload=payload, parent=parent)
 
     def __repr__(self):
@@ -467,7 +468,7 @@ class ListNode(Node, collections.abc.MutableSequence, collections.abc.Hashable):
     # Node interface
     #------------------------------------
     def clone(self, parent=None):
-        instance = self.__class__(trait=self._trait, payload=self._payload, parent=parent)
+        instance = self.__class__(trait=self._trait, child_trait=self._child_trait, payload=self._payload, parent=parent)
         instance._items = [item.clone(parent=instance) for item in self._items]
 
         return instance
@@ -476,9 +477,10 @@ class ListNode(Node, collections.abc.MutableSequence, collections.abc.Hashable):
         return enumerate(self._items)
 
     def write_payload(self, output):
+        output.write((self._child_trait.ID).to_bytes(1, 'big'))
         output.write(len(self._items).to_bytes(4, 'big'))
         for item in self._items:
-            item.write_to(output, name=None)
+            item.write_payload(output)
 
     #------------------------------------
     # Managing ancestors chain
@@ -516,9 +518,12 @@ class ListNode(Node, collections.abc.MutableSequence, collections.abc.Hashable):
         return value
 
     def __setitem__(self, idx, value):
+        if not isinstance(value, Node):
+            value = self._child_trait.FACTORY(value, trait=self._child_trait)
+
         self.invalidate()
         value.register_parent(self)
-        self._items[idx] = value # XXX should promote native values to TAG_... ?
+        self._items[idx] = value
 
     def __delitem__(self, idx):
         self.invalidate()
@@ -674,9 +679,8 @@ class StringReader(Reader):
 class ListReader(Reader):
     def make_from_payload(self, base, offset, *, parent):
         start = offset
-        container = ListNode(trait=self._trait, payload=None, parent=parent)
 
-        trait, offset = TAG.parse_tag(base, offset)
+        child_trait, offset = TAG.parse_tag(base, offset)
         count, = unpack('>i',bytes(base[offset:offset+4]))
         offset += 4
         # XXX Check implications of that statement:
@@ -687,9 +691,12 @@ class ListReader(Reader):
 
         if count < 0:
             count = 0
+
+        container = ListNode(trait=self._trait, child_trait=child_trait, payload=None, parent=parent)
+
         items = []
         while count > 0:
-          item, offset = trait.make_from_payload(base, offset, parent=container)
+          item, offset = child_trait.make_from_payload(base, offset, parent=container)
           container._items.append(item) # direct access to the storage to bypass invalidate()
 
           count -= 1

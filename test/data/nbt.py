@@ -1,3 +1,4 @@
+import struct
 
 # ==================================================================== 
 # Useful macros & constants
@@ -11,12 +12,12 @@ BYTE = lambda n: n.to_bytes(1, 'big').hex()
 SHORT = lambda n: n.to_bytes(2, 'big').hex()
 INT = lambda n: n.to_bytes(4, 'big').hex()
 LONG = lambda n: n.to_bytes(8, 'big').hex()
-FLOAT = lambda : ""
-DOUBLE = lambda : ""
+FLOAT = lambda n : struct.pack(">f", n).hex()
+DOUBLE = lambda n : struct.pack(">d", n).hex()
 BYTE_ARRAY = lambda : ""
 STRING = NAME
 LIST = lambda : ""
-COMPOUND = lambda : ""
+COMPOUND = lambda *frames : " ".join([frame.HEX for frame in frames] + [END()])
 INT_ARRAY = lambda : ""
 LONG_ARRAY = lambda : ""
 
@@ -93,6 +94,18 @@ STRING_FRAME = lambda v, name = "stringTest" : FRAME(
   STRING.ID,
   NAME(name),
     STRING(v)
+)
+
+FLOAT_FRAME = lambda v, name = "floatTest" : FRAME(
+  STRING.ID,
+  NAME(name),
+    FLOAT(v)
+)
+
+DOUBLE_FRAME = lambda v, name = "doubleTest" : FRAME(
+  STRING.ID,
+  NAME(name),
+    DOUBLE(v)
 )
 
 SOME_SHORT = SHORT_FRAME(32767)
