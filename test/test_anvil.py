@@ -18,14 +18,14 @@ class TestAnvil(unittest.TestCase):
     def test_1(self):
         """ Anvil files without data should have all chunks empty
         """
-        region = Anvil()
+        region = Anvil(0,0)
         chunks = [region.chunk_info(x,z) for z in range(32) for x in range(32)]
         self.assertSequenceEqual(chunks, EMPTY_CHUNKS)
 
     def test_2(self):
         """ Anvil files with incomplete headers should be silently fixed
         """
-        region = Anvil(b"\x00"*(PAGE_SIZE//2))
+        region = Anvil(0,0,b"\x00"*(PAGE_SIZE//2))
         chunks = [region.chunk_info(x,z) for z in range(32) for x in range(32)]
         self.assertSequenceEqual(chunks, EMPTY_CHUNKS)
 
@@ -39,7 +39,7 @@ class TestAnvil(unittest.TestCase):
             # Cause all warnings to always be triggered.
             warnings.simplefilter("always")
 
-            region = Anvil(broken_header.to_bytes(4, 'big'))
+            region = Anvil(0,0,broken_header.to_bytes(4, 'big'))
             chunk = region.chunk_info(0,0)
 
         self.assertEqual([chunk.addr,chunk.size], [addr, size])
@@ -48,7 +48,7 @@ class TestAnvil(unittest.TestCase):
     def test_4(self):
         """ Anvil files should compute logical page usage bitmap
         """
-        region = Anvil(REGION(5*1024*1024,
+        region = Anvil(0,0,REGION(5*1024*1024,
           CHUNK(3,4,pageaddr=5,pagecount=2,data=UTF8("some data")),
         ))
 
@@ -59,7 +59,7 @@ class TestAnvil(unittest.TestCase):
     def test_5(self):
         """ Anvil files bitmap should trace overlapping chunks
         """
-        region = Anvil(REGION(5*1024*1024,
+        region = Anvil(0,0,REGION(5*1024*1024,
           CHUNK(0,1,pageaddr=4,pagecount=2,data=UTF8("some data")),
           CHUNK(3,4,pageaddr=5,pagecount=2,data=UTF8("other data")),
         ))
@@ -82,7 +82,7 @@ class TestAnvil(unittest.TestCase):
             # Cause all warnings to always be triggered.
             warnings.simplefilter("always")
 
-            region = Anvil(REGION(5*1024*1024,
+            region = Anvil(0,0,REGION(5*1024*1024,
               # at page 1, date are in the region header
               CHUNK(3,4,pageaddr=1,pagecount=2,data=UTF8("some data")),
             ))
@@ -93,7 +93,7 @@ class TestAnvil(unittest.TestCase):
         """ Anvil files can return raw chunk data
         """
         data=b"some random data"
-        region = Anvil(REGION(5*1024*1024,
+        region = Anvil(0,0,REGION(5*1024*1024,
           CHUNK(3,4,pageaddr=5,pagecount=2,data=data),
         ))
 
@@ -105,7 +105,7 @@ class TestAnvil(unittest.TestCase):
         """ Anvil files can copy raw chunk data
         """
         data=b"some random data"
-        region = Anvil(REGION(5*1024*1024,
+        region = Anvil(0,0,REGION(5*1024*1024,
           CHUNK(3,4,pageaddr=5,pagecount=2,data=data),
         ))
 
@@ -118,7 +118,7 @@ class TestAnvil(unittest.TestCase):
         self.assertTrue(len(content)%PAGE_SIZE == 0)
 
     def test_chunk_accessor(self):
-        region = Anvil()
+        region = Anvil(0,0)
 
         chunk_accessor = region.chunk
         self.assertIsInstance(chunk_accessor, Anvil.ChunkAccessor)
@@ -131,7 +131,7 @@ class TestAnvil(unittest.TestCase):
         self.assertEqual(addr, (0x102030, 0x40))
 
     def test_empty_region(self):
-        region = Anvil()
+        region = Anvil(0,0)
         #self.assertEqual(bytes(region._locations), bytes(4096))
         #self.assertEqual(bytes(region._timestamps), bytes(4096))
         #self.assertEqual(region._eof, 2*4096)
@@ -139,14 +139,14 @@ class TestAnvil(unittest.TestCase):
         self.assertEqual(region.chunk_info(1,2), (None, None, 0, 1, 2, b""))
 
     def test_write_chunk(self):
-        region = Anvil()
+        region = Anvil(0,0)
         region.write_chunk(1,2, nbt.Integer(3))
         chunk = region.chunk_info(1,2)
         self.assertEqual((chunk.x,chunk.z), (1, 2))
         self.assertGreater(len(chunk.data), 0)
 
     def test_kill_chunk(self):
-        region = Anvil(REGION(10*PAGE_SIZE,
+        region = Anvil(0,0,REGION(10*PAGE_SIZE,
           CHUNK(1,2,pageaddr=3,data=CHUNK_DATA(
             SHORT_FRAME(123).BYTES
           )),
@@ -159,7 +159,7 @@ class TestAnvil(unittest.TestCase):
         self.assertEqual(region.bitmap(), [(), (), (), (), (), ((2, 1),)])
 
     def test_parse_chunk(self):
-        region = Anvil(REGION(10*PAGE_SIZE,
+        region = Anvil(0,0,REGION(10*PAGE_SIZE,
           CHUNK(1,2,pageaddr=4,pagecount=2,data=CHUNK_DATA(
             SHORT_FRAME(123)
           )),
@@ -168,7 +168,7 @@ class TestAnvil(unittest.TestCase):
         self.assertEqual(nbt, 123)
 
     def test_copy_chunk(self):
-        region = Anvil(REGION(10*PAGE_SIZE,
+        region = Anvil(0,0,REGION(10*PAGE_SIZE,
           CHUNK(1,2,pageaddr=4,pagecount=2,data=CHUNK_DATA(
             SHORT_FRAME(123)
           )),
@@ -182,7 +182,7 @@ class TestAnvil(unittest.TestCase):
         self.assertEqual(nbt, 123)
 
     def test_swap_chunk(self):
-        region = Anvil(REGION(10*PAGE_SIZE,
+        region = Anvil(0,0,REGION(10*PAGE_SIZE,
           CHUNK(2,3,pageaddr=4,pagecount=2,data=CHUNK_DATA(
             STRING_FRAME("23")
           )),
@@ -199,14 +199,14 @@ class TestAnvil(unittest.TestCase):
         self.assertEqual(nbt, 12)
 
     def test_region(self):
-        region = Anvil.fromFile(FILE["region-r.0.0.mca"])
+        region = Anvil.fromFile(0,0,FILE["region-r.0.0.mca"])
         info = region.chunk_info(1,2)
         chunk = region.parse_chunk(1,2)
         # print(chunk.Level.Entities.export())
         # print(chunk.Level.export(scope=['xPos', 'zPos']))
 
     def test_chunk_contextmanager(self):
-        region = Anvil(REGION(10*PAGE_SIZE,
+        region = Anvil(0,0,REGION(10*PAGE_SIZE,
           CHUNK(1,2,pageaddr=3,data=CHUNK_DATA(
             COMPOUND_FRAME(
               INT_FRAME(123, "data")
@@ -219,7 +219,7 @@ class TestAnvil(unittest.TestCase):
         self.assertEqual(region.parse_chunk(1,2).data, 12)
 
     def test_write_chunk(self):
-        region = Anvil()
+        region = Anvil(0,0)
         region.write_chunk(1,2, nbt.Integer(3))
 
 
@@ -238,7 +238,7 @@ class TestAnvil(unittest.TestCase):
             # Cause all warnings to always be triggered.
             warnings.simplefilter("error")
 
-            region = Anvil.fromFile('test/tmp/dump.bin')
+            region = Anvil.fromFile(0,0,'test/tmp/dump.bin')
             chunk = region.parse_chunk(1,2)
             # print(chunk)
 
@@ -259,7 +259,7 @@ class TestAnvilEdgeCases(unittest.TestCase):
     )
 
     def setUp(self):
-        self.root = Anvil(self.R)
+        self.root = Anvil(0,0,self.R)
 
     def test_1(self):
         """ Parsing a non-existant chunk should
@@ -279,7 +279,7 @@ class TestAnvilEdgeCases(unittest.TestCase):
     def test_3(self):
         """ Anvil files should not break on loading damaged files
         """
-        region = Anvil.fromFile('test/data/broken-r.-1.-1.mca')
+        region = Anvil.fromFile(0,0,'test/data/broken-r.-1.-1.mca')
         with warnings.catch_warnings(record=True) as w:
             # Cause all warnings to always be triggered.
             warnings.simplefilter("always")
@@ -299,7 +299,7 @@ class TestAnvilEdgeCases(unittest.TestCase):
     def test_4(self):
         """ Anvil files should load "broken" chunks
         """
-        region = Anvil.fromFile('test/data/broken-r.-1.-1.mca')
+        region = Anvil.fromFile(-1,-1,'test/data/broken-r.-1.-1.mca')
 
         #
         # chunk (17,14) points to garbage data
@@ -351,8 +351,8 @@ class TestInterAnvil(unittest.TestCase):
     )
 
     def setUp(self):
-        self.r1 = Anvil(self.R1)
-        self.r2 = Anvil(self.R2)
+        self.r1 = Anvil(0,0,self.R1)
+        self.r2 = Anvil(0,0,self.R2)
 
     def test_1(self):
         """ Chunk raw data overwrite chunks in another region
@@ -412,7 +412,7 @@ class TestChunks(unittest.TestCase):
     )
 
     def setUp(self):
-        self.region = Anvil(self.R)
+        self.region = Anvil(0,0,self.R)
         self.region.set_chunk_data(3,5, bytes.fromhex(CHUNK_DATA(STRING_FRAME("Updated chunk 3,5"))))
         self.region.set_chunk_data(6,6, b"** BAD CHUNK **")
         self.region.kill_chunk(6,7)
@@ -440,26 +440,26 @@ class TestAutoSave(unittest.TestCase):
         """ Anvil files parsed from file can be saved
             with their original name
         """
-        region = Anvil.fromFile(FILE['region-copy.mca'])
+        region = Anvil.fromFile(0,0,FILE['region-copy.mca'])
         chunk1 = next(region.chunks())
         (x,z) = chunk1.x, chunk1.z
         chunk1.kill()
 
         region.save()
 
-        region = Anvil.fromFile(FILE['region-copy.mca'])
+        region = Anvil.fromFile(0,0,FILE['region-copy.mca'])
         chunk1 = next(region.chunks())
         self.assertNotEqual((chunk1.x, chunk1.z), (x,z))
 
     def test_2(self):
         """ Anvil files from file act as a context manager to save changes
         """
-        with Anvil.fromFile(FILE['region-copy.mca']) as region:
+        with Anvil.fromFile(0,0,FILE['region-copy.mca']) as region:
             chunk1 = next(region.chunks())
             (x,z) = chunk1.x, chunk1.z
             chunk1.kill()
 
-        with Anvil.fromFile(FILE['region-copy.mca']) as region:
+        with Anvil.fromFile(0,0,FILE['region-copy.mca']) as region:
             chunk1 = next(region.chunks())
             self.assertNotEqual((chunk1.x, chunk1.z), (x,z))
 
@@ -469,7 +469,7 @@ class TestAutoSave(unittest.TestCase):
         with open(FILE['region-copy.mca'], 'rb') as f:
             old_data = f.read()
 
-        with Anvil.fromFile(FILE['region-copy.mca']) as region:
+        with Anvil.fromFile(0,0,FILE['region-copy.mca']) as region:
             chunk1 = next(region.chunks())
             (x,z) = chunk1.x, chunk1.z
 

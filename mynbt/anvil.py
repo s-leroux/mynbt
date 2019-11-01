@@ -253,11 +253,13 @@ class Chunk:
 # Anvil
 # ====================================================================
 class Anvil:
-    def __init__(self, data=b"", *, name=None):
+    def __init__(self, rx, rz, data=b"", *, name=None):
       """ Create a new region from binary data following the MC region format
           descibed in https://minecraft.gamepedia.com/Region_file_format.
       """
       self._name = name or super().__str__()
+      self._rx = rx
+      self._rz = rz
       self._bitmap = None
       self._issues = []
       self._version = 0
@@ -545,13 +547,13 @@ class Anvil:
                 output.write(EMPTY_PAGE[pad:])
 
     @classmethod
-    def fromFile(cls, path, *, factory=None):
+    def fromFile(cls, rx, rz, path, *, factory=None):
       with open(path, 'rb') as f:
         map = f.read() # read into memory since we have issues when
                        # mmap'd backing files are modified
                        # (e.g: by another process of simply by using `save()`)
 
-      result = (factory or cls)(map, name=path)
+      result = (factory or cls)(rx, rz, map, name=path)
       old_version = result._version
       patch(result, withsave(path, open, lambda: result._version > old_version))
 
