@@ -30,12 +30,9 @@ EMPTY_PAGE = bytes(PAGE_SIZE)
 """ An page full of \x00 bytes
 """
 
-ChunkInfo = namedtuple('ChunkInfo', ['addr', 'size', 'timestamp', 'x', 'z', 'data'])
-def EMPTY_CHUNK(x,z):
-    return ChunkInfo(None,None,0,x,z,EMPTY_PAGE[0:0])
-EMPTY_CHUNKS = tuple(
-    EMPTY_CHUNK(x,z) for z in range(32) for x in range(32)
-)
+ChunkInfo = namedtuple('ChunkInfo', ['addr', 'size', 'timestamp', 'rx', 'rz', 'x', 'z', 'data'])
+def EMPTY_CHUNK(rx, rz, x,z):
+    return ChunkInfo(None,None,0,rx,rz,x,z,EMPTY_PAGE[0:0])
 
 #
 # XXX Avoid module's global namespace polution by defining the
@@ -275,14 +272,14 @@ class Anvil:
       locations=view[0:PAGE_SIZE].cast('i')
       timestamps=view[PAGE_SIZE:2*PAGE_SIZE].cast('i')
 
-      self._chunks = list(EMPTY_CHUNKS)
+      self._chunks = [None] * 1024
 
       for i in range(1024):
         z, x = divmod(i, 32)
-        assert self._chunks[i].x == x
-        assert self._chunks[i].z == z
         location = int.from_bytes(locations[i:][:1], 'big')
-        if location != 0:
+        if location == 0:
+            self._chunks[i] = EMPTY_CHUNK(rx,rz,x,z)
+        else:
             issues = []
 
             timestamp = int.from_bytes(timestamps[i:][:1], 'big')
@@ -300,7 +297,7 @@ class Anvil:
 
             self._pagecount = max(self._pagecount, addr+size)
 
-            self._chunks[i] = ci = ChunkInfo(addr, size, timestamp, x, z, data)
+            self._chunks[i] = ci = ChunkInfo(addr, size, timestamp, rx,rz,x, z, data)
             for issue in issues:
                 self.track(issue(ci))
 
@@ -451,7 +448,7 @@ class Anvil:
         timestamp = timestamp or int(time())
 
         idx = z*32+x
-        self._chunks[idx] = ci = ChunkInfo(addr, size, timestamp, x, z, dump)
+        self._chunks[idx] = ci = ChunkInfo(addr, size, timestamp, self._rx, self._rz, x, z, dump)
         return ci
 
     def get_chunk_data(self, x, z):
@@ -466,7 +463,7 @@ class Anvil:
         """
         timestamp = timestamp or int(time())
 
-        ci = ChunkInfo(None, None, timestamp, x, z, data)
+        ci = ChunkInfo(None, None, timestamp, self._rx, self._rz, x, z, data)
 
         return self.set_chunk(ci)
 
@@ -482,7 +479,7 @@ class Anvil:
     def kill_chunk(self, x, z):
         """ Remove a chunk
         """
-        self.set_chunk_info(EMPTY_CHUNK(x,z))
+        self.set_chunk_info(EMPTY_CHUNK(self._rx,self._rz,x,z))
 
     def copy_chunk(self, from_x, from_z, to_x, to_z):
         """ Shorthand for set_chunk_data(...,get_chunk_data(...))

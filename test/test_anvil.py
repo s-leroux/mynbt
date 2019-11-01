@@ -15,19 +15,21 @@ FILE = {
 }
 
 class TestAnvil(unittest.TestCase):
+    EMPTY_CHUNKS=[EMPTY_CHUNK(0,0,x,z) for z in range(32) for x in range(32)]
+
     def test_1(self):
         """ Anvil files without data should have all chunks empty
         """
         region = Anvil(0,0)
         chunks = [region.chunk_info(x,z) for z in range(32) for x in range(32)]
-        self.assertSequenceEqual(chunks, EMPTY_CHUNKS)
+        self.assertSequenceEqual(chunks, self.EMPTY_CHUNKS)
 
     def test_2(self):
         """ Anvil files with incomplete headers should be silently fixed
         """
         region = Anvil(0,0,b"\x00"*(PAGE_SIZE//2))
         chunks = [region.chunk_info(x,z) for z in range(32) for x in range(32)]
-        self.assertSequenceEqual(chunks, EMPTY_CHUNKS)
+        self.assertSequenceEqual(chunks, self.EMPTY_CHUNKS)
 
     def test_3(self):
         """ Missing data are filled with zero bytes
@@ -131,12 +133,12 @@ class TestAnvil(unittest.TestCase):
         self.assertEqual(addr, (0x102030, 0x40))
 
     def test_empty_region(self):
-        region = Anvil(0,0)
+        region = Anvil(-2,-3)
         #self.assertEqual(bytes(region._locations), bytes(4096))
         #self.assertEqual(bytes(region._timestamps), bytes(4096))
         #self.assertEqual(region._eof, 2*4096)
 
-        self.assertEqual(region.chunk_info(1,2), (None, None, 0, 1, 2, b""))
+        self.assertEqual(region.chunk_info(1,2), (None, None, 0, -2,-3,1, 2, b""))
 
     def test_write_chunk(self):
         region = Anvil(0,0)
