@@ -3,6 +3,7 @@ import os.path
 import glob
 
 from mynbt.region import Region
+from mynbt.poi import POI
 from mynbt.nbt import TAG
 
 # ====================================================================
@@ -21,6 +22,7 @@ def Locator(dirname):
         level=lambda : os.path.join(dirname, 'level.dat'),
         raids=lambda : os.path.join(dirname, 'data', 'raids.dat'),
         region=lambda rx, rz : os.path.join(dirname, 'region', 'r.{}.{}.mca'.format(rx,rz)),
+        poi=lambda rx, rz : os.path.join(dirname, 'poi', 'r.{}.{}.mca'.format(rx,rz)),
         players=lambda : glob.glob(os.path.join(dirname, '*.dat'))
     ))
 
@@ -51,6 +53,9 @@ class World:
 
     def region(self, rx, rz):
         return Region.fromFile(rx, rz, self._locator.region(rx,rz))
+
+    def poi(self, rx, rz):
+        return POI.fromFile(rx, rz, self._locator.region(rx,rz))
 
     def chunk(self, cx, cz):
         """ Get a chunk

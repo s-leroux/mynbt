@@ -597,6 +597,7 @@ class CompoundNode(Node, collections.abc.MutableMapping, collections.abc.Hashabl
         return self._items.keys()
 
     def __getitem__(self, idx):
+        idx = str(idx)
         node = self._items[idx]
         value = node.value()
 
@@ -607,6 +608,7 @@ class CompoundNode(Node, collections.abc.MutableMapping, collections.abc.Hashabl
         return value
 
     def __setitem__(self, idx, value):
+        idx = str(idx)
         self.invalidate()
         if not isinstance(value, Node):
             # Non-Node objects must be promoted.

@@ -7,9 +7,11 @@ class Region(Anvil):
         data_rx, data_cx = divmod(nbt.xPos, 32)
         data_rz, data_cz = divmod(nbt.zPos, 32)
 
+        # adjust region pos
         nbt.xPos = 32*self._rx+x
         nbt.zPos = 32*self._rz+z
 
+        # adjust entity positions
         try:
             for entity in nbt.Level.Entities:
                 ex = entity.Pos[0] % 32

@@ -16,6 +16,7 @@ class TestLocator(unittest.TestCase):
         self.assertEqual(self.locator.level(), os.path.join('.','level.dat'))
         self.assertEqual(self.locator.raids(), os.path.join('.','data','raids.dat'))
         self.assertEqual(self.locator.region(1,-2), os.path.join('.','region','r.1.-2.mca'))
+        self.assertEqual(self.locator.poi(1,-2), os.path.join('.','poi','r.1.-2.mca'))
 
 
 class TestWorld(unittest.TestCase):
