@@ -1,8 +1,40 @@
 from mynbt.anvil import Anvil, ZLIB
 
+from mynbt.utils import patch
+from mynbt.section import Section
+
+#------------------------------------
+# Section mixin
+#------------------------------------
+class WithSectionAccessor:
+    class SectionAccessor:
+        def __init__(self, nbt):
+            self._nbt = nbt
+
+        def __getitem__(self, idx):
+            # XXX Should try and return a new section if not found
+            return next(self._nbt.sections(filter=lambda section : section.Y == idx))
+
+    section = property(SectionAccessor)
+
+    def sections(self, filter=lambda section : True):
+        for section in self['Level']['Sections']:
+            if filter(section):
+                yield Section.fromNBT(self.Level.xPos, self.Level.zPos, section)
+
+#------------------------------------
+# Region
+#------------------------------------
 class Region(Anvil):
     """ A Region file
     """
+    def parse_chunk_info(self, chunk_info):
+        nbt = super().parse_chunk_info(chunk_info)
+
+        patch(nbt, WithSectionAccessor)        
+
+        return nbt
+
     def write_chunk(self, x, z, nbt, *, compression=ZLIB, timestamp=None):
         data_rx, data_cx = divmod(nbt.Level.xPos, 32)
         data_rz, data_cz = divmod(nbt.Level.zPos, 32)

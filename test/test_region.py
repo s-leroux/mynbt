@@ -1,8 +1,14 @@
 import unittest
+import os.path
 
 from mynbt.region import *
 from test.data.region import *
 from test.data.nbt import *
+
+FILE = {
+  'simplechunk.mca': os.path.join('test','data','simplechunk-r.0.0.mca'),
+}
+
 
 class TestRegion(unittest.TestCase):
     RX = 10
@@ -65,3 +71,21 @@ class TestRegion(unittest.TestCase):
         self.assertEqual(nbt.Level.Entities[0].Pos[0], 16*32*self.RX + 16*self.C2X + 11)
         self.assertEqual(nbt.Level.Entities[0].Pos[2], 16*32*self.RZ + 16*self.C2Z + 7)
 
+class TestAccessors(unittest.TestCase):
+    def setUp(self):
+        self.region = Region.fromFile(0,0,FILE['simplechunk.mca'])
+        self.chunk = next(self.region.chunks())
+        self.nbt = self.chunk.parse()
+
+    def test_1(self):
+        """ Region should attach a section iterator to nbt
+        """
+        for section in self.nbt.sections():
+            self.assertIsNotNone(section.y)
+
+    def test_2(self):
+        """ Region should attach a section accessor to nbt
+        """
+        N=3
+        section = self.nbt.section[N]
+        self.assertEqual(section.y, N)
