@@ -1,6 +1,8 @@
 import unittest
+
 from mynbt.bitpack import *
 from pprint import pprint
+from array import array
 
 from test.data.simplechunk import SECTION
 
@@ -27,6 +29,12 @@ class TestUnpack(unittest.TestCase):
         self.assertEqual(unpack(2, 8, [0xFE]).tolist(), [0b10,0b11,0b11,0b11])
         self.assertEqual(unpack(4, 8, [0xFE]).tolist(), [0b1110,0b1111])
 
+    def test_2(self):
+        s = array('Q', [1229782938247303441]*3)
+        u = unpack(12, 64, s)
+        r = pack(64, 12, u)
+        self.assertEqual(s,r)
+  
     def test_100(self):
         data = SECTION['BlockStates'][173:178]
         data = SECTION['BlockStates']
