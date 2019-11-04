@@ -37,7 +37,7 @@ class TestPOI(unittest.TestCase):
                                   [
                                       WITH_NAME("pos",LIST_FRAME)(
                                           SHORT,
-                                          [32*32*RX+32*C1X + 11, 0, 32*32*RZ+32*C1Z + 22]
+                                          [16*32*RX+16*C1X + 11, 0, 16*32*RZ+16*C1Z + 7]
                                       ),
                                   ]
                               ),
@@ -57,4 +57,5 @@ class TestPOI(unittest.TestCase):
         nbt = self.poi.chunk[self.C2X,self.C2Z].parse()
         pos = nbt.Data.Sections[1].Records[0].pos
 
-        self.assertEqual(pos[0], 32*32*self.RX + 32*self.C2X + 11)
+        self.assertEqual(pos[0], 16*32*self.RX + 16*self.C2X + 11)
+        self.assertEqual(pos[2], 16*32*self.RZ + 16*self.C2Z + 7)

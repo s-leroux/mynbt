@@ -17,4 +17,5 @@ B_CHUNK=(1,2)
 with World.fromStandardSaveFolder(WORLD_NAME).region(*REGION) as region:
     # Pythonic swap:
     # >>> a,b = b,a
+    nbt = region.chunk[A_CHUNK].parse()
     region.chunk[A_CHUNK], region.chunk[B_CHUNK] = region.chunk[B_CHUNK], region.chunk[A_CHUNK]

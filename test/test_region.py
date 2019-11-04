@@ -16,15 +16,15 @@ class TestRegion(unittest.TestCase):
       CHUNK(C1X,C1Z,pageaddr=3,data=CHUNK_DATA(
           COMPOUND_FRAME(
               STRING_FRAME("Chunk 1,2", "n"),
-              INT_FRAME(32*RX+C1X, "xPos"),
-              INT_FRAME(32*RZ+C1Z, "zPos"),
               WITH_NAME("Level",COMPOUND_FRAME)(
+                  INT_FRAME(32*RX+C1X, "xPos"),
+                  INT_FRAME(32*RZ+C1Z, "zPos"),
                   WITH_NAME("Entities",LIST_FRAME)(
                       COMPOUND,
                       [
                           WITH_NAME("Pos",LIST_FRAME)(
                               SHORT,
-                              [32*32*RX+32*C1X + 11, 0, 32*32*RZ+32*C1Z + 22]
+                              [16*32*RX+16*C1X + 11, 0, 16*32*RZ+16*C1Z + 7]
                           ),
                       ]
                   ),
@@ -33,9 +33,11 @@ class TestRegion(unittest.TestCase):
       )),
       CHUNK(C2X,C2Z,pageaddr=4,data=CHUNK_DATA(
           COMPOUND_FRAME(
-              STRING_FRAME("Chunk 3,4", "n"),
-              INT_FRAME(32*RX+C2X, "xPos"),
-              INT_FRAME(32*RZ+C2Z, "zPos"),
+              WITH_NAME("Level",COMPOUND_FRAME)(
+                  STRING_FRAME("Chunk 3,4", "n"),
+                  INT_FRAME(32*RX+C2X, "xPos"),
+                  INT_FRAME(32*RZ+C2Z, "zPos"),
+              ),
           ),
       )),
     )
@@ -50,8 +52,8 @@ class TestRegion(unittest.TestCase):
 
         nbt = self.region.chunk[self.C2X,self.C2Z].parse()
         self.assertEqual(nbt.n, "Chunk 1,2")
-        self.assertEqual(nbt.xPos, 32*self.RX+self.C2X)
-        self.assertEqual(nbt.zPos, 32*self.RZ+self.C2Z)
+        self.assertEqual(nbt.Level.xPos, 32*self.RX+self.C2X)
+        self.assertEqual(nbt.Level.zPos, 32*self.RZ+self.C2Z)
 
 
     def test_2(self):
@@ -60,6 +62,6 @@ class TestRegion(unittest.TestCase):
         self.region.chunk[self.C2X,self.C2Z] = self.region.chunk[self.C1X,self.C1Z]
 
         nbt = self.region.chunk[self.C2X,self.C2Z].parse()
-        self.assertEqual(nbt.Level.Entities[0].Pos[0], 32*32*self.RX + 32*self.C2X + 11)
-        self.assertEqual(nbt.Level.Entities[0].Pos[2], 32*32*self.RZ + 32*self.C2Z + 22)
+        self.assertEqual(nbt.Level.Entities[0].Pos[0], 16*32*self.RX + 16*self.C2X + 11)
+        self.assertEqual(nbt.Level.Entities[0].Pos[2], 16*32*self.RZ + 16*self.C2Z + 7)
 

@@ -8,11 +8,11 @@ class POI(Anvil):
         try:
             for section in nbt.Data.Sections.values():
                 for record in section.Records:
-                    ex = record.pos[0] % 32
-                    ez = record.pos[2] % 32
+                    ex = record.pos[0] % 16
+                    ez = record.pos[2] % 16
 
-                    record.pos[0] = ex + 32*x + 32*32*self._rx
-                    record.pos[2] = ez + 32*z + 32*32*self._rz
+                    record.pos[0] = ex + 16*x + 16*32*self._rx
+                    record.pos[2] = ez + 16*z + 16*32*self._rz
         except KeyError:
             pass
 
