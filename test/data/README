@@ -4,6 +4,16 @@ SAMPLE FILES
 * region-r.0.0.mca
   A valid Minecraft 1.13 region file
 
+* simplechunk-r.0.0.mca
+  A region file containing only the chunk (2,1)
+      From y=0 to y=50, the chunk is filled with
+      cobblestone
+      From y=51 to y=90, sand
+      Above y=90, air
+      At 32,90,16 a magma block
+      At 47,90,16 a glass block
+      At 47,90,31 a stone block
+
 * broken-r.-1.-1.mca
   A genuinely broken Minecraft region file with multiple header
   entries pointing to the same chunk (potentially with other issues)
