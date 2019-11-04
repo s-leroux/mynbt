@@ -4,7 +4,7 @@ import glob
 
 from mynbt.region import Region
 from mynbt.poi import POI
-from mynbt.nbt import TAG
+from mynbt.nbt import parse_file
 
 # ====================================================================
 # Constants
@@ -84,5 +84,5 @@ class World:
         """ Itertor over the player's data
         """
         for player in self._locator.players():
-            with TAG.parse_file(player) as p:
+            with parse_file(player) as p:
                 yield p

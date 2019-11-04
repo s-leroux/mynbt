@@ -18,7 +18,7 @@ import gzip
 import io
 import itertools
 
-from mynbt.nbt import TAG, EmptyChunkError
+from mynbt.nbt import parse, EmptyChunkError
 from mynbt.error import *
 from mynbt.utils import hexdump, patch, withsave
 
@@ -416,7 +416,7 @@ class Anvil:
       if length == 0:
           return None
 
-      nbt, *_ = TAG.parse(decompressor(data))
+      nbt, *_ = parse(decompressor(data))
 
       try:
           lx = nbt.Level.xPos

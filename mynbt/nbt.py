@@ -25,71 +25,65 @@ class CircularReferenceError(NBTError):
         super().__init__("Circular reference detected")
 
 # ====================================================================
-# Core namespace XXX to rename
+# Module functions
 # ====================================================================
-class TAG:
-    @staticmethod
-    def parse_id(base, offset):
-        ID, = unpack('>B',bytes(base[offset:offset+1]))
-        return ID,offset+1
+def parse_id(base, offset):
+    ID, = unpack('>B',bytes(base[offset:offset+1]))
+    return ID,offset+1
 
-    @staticmethod
-    def parse_name(base, offset):
-        l, = unpack('>h',bytes(base[offset:offset+2]))
-        name = bytes(base[offset+2:offset+2+l]).decode("utf8")
-        return name,offset+2+l
+def parse_name(base, offset):
+    l, = unpack('>h',bytes(base[offset:offset+2]))
+    name = bytes(base[offset+2:offset+2+l]).decode("utf8")
+    return name,offset+2+l
 
-    @staticmethod
-    def parse_tag(base, offset):
-        ID,offset = TAG.parse_id(base, offset)
-        trait = TraitMetaclass.TRAITS[ID]
-        assert trait.ID == ID
+def parse_tag(base, offset):
+    ID,offset = parse_id(base, offset)
+    trait = TraitMetaclass.TRAITS[ID]
+    assert trait.ID == ID
 
-        return trait, offset
+    return trait, offset
 
-    @staticmethod
-    def parse(base, offset=0, parent=None):
-        base = memoryview(base)
-        start = offset
-        name = None
-        trait, offset = TAG.parse_tag(base,offset)
-        if trait is EndTrait:
-          result = End(parent=parent)
-        else:
-          name, offset = TAG.parse_name(base, offset)
-          result, offset = trait.make_from_payload(base, offset, parent=parent)
+def parse(base, offset=0, parent=None):
+    base = memoryview(base)
+    start = offset
+    name = None
+    trait, offset = parse_tag(base,offset)
+    if trait is EndTrait:
+      result = End(parent=parent)
+    else:
+      name, offset = parse_name(base, offset)
+      result, offset = trait.make_from_payload(base, offset, parent=parent)
 
-        return result, name, offset
+    return result, name, offset
 
-    @staticmethod
-    def parse_file(path):
-        readers = (
-          gzip.open,
-          open,
-        )
+def parse_file(path):
+    readers = (
+      gzip.open,
+      open,
+    )
 
-        err = None
-        for reader in readers:
-          try:
-            with reader(path, "rb") as f:
-              data = f.read()
-            break
-          except OSError as e:
-            err = e
-        else:
-          raise err or OSError("Can't open " + path)
+    err = None
+    for reader in readers:
+      try:
+        with reader(path, "rb") as f:
+          data = f.read()
+        break
+      except OSError as e:
+        err = e
+    else:
+      raise err or OSError("Can't open " + path)
 
-        result, name, offset = TAG.parse(data, 0)
-        assert data[offset:] == b""
+    result, name, offset = parse(data, 0)
+    assert data[offset:] == b""
 
-        #
-        # monkey patch the root object to add a save() method
-        # In addition, the object behaves as a context manager
-        # to save the file on exit
-        old_version = result._version
-        patch(result, withsave(path, reader, lambda : result._version > old_version))
+    #
+    # monkey patch the root object to add a save() method
+    # In addition, the object behaves as a context manager
+    # to save the file on exit
+    old_version = result._version
+    patch(result, withsave(path, reader, lambda : result._version > old_version))
 
-        return result
+    return result
 
 # ====================================================================
 # Value types
@@ -365,7 +359,7 @@ class Array(Value):
     def __setitem__(self, idx, value):
         self.invalidate()
         value.register_parent(self)
-        self._items[idx] = value # XXX should promote native values to TAG_... ?
+        self._items[idx] = value # XXX should promote native values to _... ?
 
     def __delitem__(self, idx):
         self.invalidate()
@@ -682,7 +676,7 @@ class ListReader(Reader):
     def make_from_payload(self, base, offset, *, parent):
         start = offset
 
-        child_trait, offset = TAG.parse_tag(base, offset)
+        child_trait, offset = parse_tag(base, offset)
         count, = unpack('>i',bytes(base[offset:offset+4]))
         offset += 4
         # XXX Check implications of that statement:
@@ -712,7 +706,7 @@ class CompoundReader(Reader):
         start = offset
         items = {}
         while True:
-          item, name, offset = TAG.parse(base, offset, parent=container)
+          item, name, offset = parse(base, offset, parent=container)
           if type(item) is End:
             break
           container._items[name] = item # direct access to the storage to bypass invalidate()

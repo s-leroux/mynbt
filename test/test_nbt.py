@@ -116,7 +116,7 @@ class TestParsing(unittest.TestCase):
     def test_parse_id(self):
         data = SOME_SHORT.BYTES
         offset = 0
-        id, offset = TAG.parse_id(data, offset)
+        id, offset = parse_id(data, offset)
 
         self.assertEqual(offset, 1)
         self.assertEqual(id, 2)
@@ -124,7 +124,7 @@ class TestParsing(unittest.TestCase):
     def test_parse_name(self):
         data = SOME_SHORT.BYTES
         offset = 1
-        name, offset = TAG.parse_name(data, offset)
+        name, offset = parse_name(data, offset)
 
         self.assertEqual(name, "shortTest")
         self.assertEqual(offset, 1+2+len(name))
@@ -133,8 +133,8 @@ class TestParsing(unittest.TestCase):
         reader = AtomReader(ShortTrait)
         data = SOME_SHORT.BYTES
         offset = 0
-        id, offset = TAG.parse_id(data, offset)
-        name, offset = TAG.parse_name(data, offset)
+        id, offset = parse_id(data, offset)
+        name, offset = parse_name(data, offset)
         item, offset = reader.make_from_payload(data, offset, parent=None)
 
         self.assertEqual(data[offset:], b"")
@@ -143,12 +143,12 @@ class TestParsing(unittest.TestCase):
 
 class TestParseTags(unittest.TestCase):
     def test_parse_end(self):
-        t, name, offset = TAG.parse(bytes.fromhex("00"), 0)
+        t, name, offset = parse(bytes.fromhex("00"), 0)
         self.assertIsInstance(t, End)
         self.assertIs(t._trait, EndTrait)
 
     def test_parse_short(self):
-        t,name, offset = TAG.parse(bytes.fromhex("02  00 09  73 68 6F 72 74 54 65 73 74  7F FF"), 0)
+        t,name, offset = parse(bytes.fromhex("02  00 09  73 68 6F 72 74 54 65 73 74  7F FF"), 0)
         self.assertIsInstance(t, AtomProxy)
         self.assertIs(t._trait, ShortTrait)
         self.assertEqual(name, "shortTest")
@@ -158,19 +158,19 @@ class TestParseFiles(unittest.TestCase):
     def test_parse_level(self):
         """ It should load uncompressed NBT files
         """
-        t = TAG.parse_file(FILE['level.dat'])
+        t = parse_file(FILE['level.dat'])
         self.assertIsInstance(t, CompoundNode)
 
     def test_parse_server(self):
         """ It should load uncompressed NBT files
         """
-        t = TAG.parse_file("test/data/servers.dat")
+        t = parse_file("test/data/servers.dat")
         self.assertIsInstance(t, CompoundNode)
 
 class TestListTag(unittest.TestCase):
     def test_parse_list(self):
         data = bytes.fromhex(SOME_LIST.HEX + "FF")
-        nbt, name, offset = TAG.parse(data, 0)
+        nbt, name, offset = parse(data, 0)
         self.assertEqual(data[offset:], b"\xFF")
         self.assertIsInstance(nbt, ListNode)
         self.assertEqual(len(nbt), 4)
@@ -182,8 +182,8 @@ class TestListTag(unittest.TestCase):
           self.assertEqual(nbt[4], 4)
 
     def test_set_item(self):
-        nbt, *_ = TAG.parse(SOME_LIST.BYTES, 0)
-        val, *_ = TAG.parse(SOME_SHORT.BYTES, 0)
+        nbt, *_ = parse(SOME_LIST.BYTES, 0)
+        val, *_ = parse(SOME_SHORT.BYTES, 0)
 
         self.assertIsNot(nbt[0], val)
         self.assertIsNotNone(nbt._payload)
@@ -193,8 +193,8 @@ class TestListTag(unittest.TestCase):
         self.assertIsNone(nbt._payload)
 
     def test_append(self):
-        nbt, *_ = TAG.parse(SOME_LIST.BYTES, 0)
-        val, *_ = TAG.parse(SOME_SHORT.BYTES, 0)
+        nbt, *_ = parse(SOME_LIST.BYTES, 0)
+        val, *_ = parse(SOME_SHORT.BYTES, 0)
 
         with self.assertRaises(IndexError):
           self.assertEqual(nbt[4], 4)
@@ -207,7 +207,7 @@ class TestListTag(unittest.TestCase):
 
     def test_del_item(self):
         TEST_DATA=LIST_FRAME(SHORT, [0,1,2,3])
-        nbt, *_ = TAG.parse(TEST_DATA.BYTES)
+        nbt, *_ = parse(TEST_DATA.BYTES)
         self.assertEqual(len(nbt), 4)
         self.assertEqual(nbt[0], 0)
         self.assertEqual(nbt[1], 1)
@@ -228,40 +228,40 @@ class TestListTag(unittest.TestCase):
 
 class TestCompoundTag(unittest.TestCase):
     def test_keys(self):
-        t = TAG.parse_file(FILE['level.dat'])
+        t = parse_file(FILE['level.dat'])
         self.assertEqual(list(t.keys()), ['Data'])
 
     def test_get_attr(self):
-        t = TAG.parse_file(FILE['level.dat'])
+        t = parse_file(FILE['level.dat'])
         item = t.Data
         self.assertIn('DataPacks', list(item.keys()))
         self.assertIn('GameRules', list(item.keys()))
 
     def test_get_item(self):
-        t = TAG.parse_file(FILE['level.dat'])
+        t = parse_file(FILE['level.dat'])
         item = t['Data']
         self.assertIn('DataPacks', list(item.keys()))
         self.assertIn('GameRules', list(item.keys()))
 
     def test_get_value_in_compount(self):
-        t, _, _ = TAG.parse(SOME_COMPOUND.BYTES, 0)
+        t, _, _ = parse(SOME_COMPOUND.BYTES, 0)
         self.assertEqual(t.shortTest, 32767)
 
     def test_get_value(self):
-        t, _, _ = TAG.parse(bytes.fromhex("02  00 09  73 68 6F 72 74 54 65 73 74  7F FF"), 0)
+        t, _, _ = parse(bytes.fromhex("02  00 09  73 68 6F 72 74 54 65 73 74  7F FF"), 0)
         self.assertEqual(t, 32767)
 
     def test_nested_compound(self):
-        t, name, _ = TAG.parse(SOME_NESTED_COMPOUND.BYTES, 0)
+        t, name, _ = parse(SOME_NESTED_COMPOUND.BYTES, 0)
         self.assertEqual(name, 'Data')
         child = t._items['Comp']
 
     def test_path(self):
-        t, *_ = TAG.parse(SOME_NESTED_COMPOUND.BYTES, 0)
+        t, *_ = parse(SOME_NESTED_COMPOUND.BYTES, 0)
         self.assertEqual(t.Comp.shortTest, 32767)
 
     def test_del_item(self):
-        nbt, *_ = TAG.parse(SOME_NESTED_COMPOUND.BYTES, 0)
+        nbt, *_ = parse(SOME_NESTED_COMPOUND.BYTES, 0)
         self.assertEqual(len(nbt.Comp), 2)
         self.assertEqual(nbt.Comp['byteTest'], 127)
         self.assertEqual(nbt.Comp['shortTest'], 32767)
@@ -281,7 +281,7 @@ class TestExport(unittest.TestCase):
     )
 
     def _test_export(self, data, expected):
-          t, *_ = TAG.parse(data.BYTES)
+          t, *_ = parse(data.BYTES)
 
           x = t.export()
           self.assertEqual(x, expected)
@@ -337,7 +337,7 @@ class TestExport(unittest.TestCase):
         self._test_export(data, expected)
 
     def test_walk_compound(self):
-        t, name, _ = TAG.parse(SOME_NESTED_COMPOUND.BYTES, 0)
+        t, name, _ = parse(SOME_NESTED_COMPOUND.BYTES, 0)
         self.assertEqual(set(name for name, *_ in t.walk()), set(('', '.Comp', '.Comp.shortTest', '.Comp.byteTest', '.shortTest')))
 
     # walk is now implemented with a Visitor
@@ -346,7 +346,7 @@ class TestExport(unittest.TestCase):
     #     self.assertSequenceEqual(list(name for name in t.visit()), ('', '.Comp', '.Comp.shortTest', '.Comp.byteTest', '.shortTest'))
 
     def test_walk_list(self):
-        t, name, _ = TAG.parse(SOME_LIST.BYTES, 0)
+        t, name, _ = parse(SOME_LIST.BYTES, 0)
         self.assertSequenceEqual([name for name, *_ in t.walk()], ['', '.0', '.1', '.2', '.3'])
 
 import gzip
@@ -354,14 +354,14 @@ class TestCache(unittest.TestCase):
     def test_compound_cache(self):
         with gzip.open(FILE['level.dat'], "rb") as f:
           data = f.read()
-          t, _, offset = TAG.parse(data, 0)
+          t, _, offset = parse(data, 0)
 
         self.assertEqual(bytes(t._payload), data[3:])
 
     def test_parent_tracking(self):
         """ Nested elements shoud track their parent as weak links
         """
-        t, *_ = TAG.parse(SOME_NESTED_COMPOUND.BYTES, 0)
+        t, *_ = parse(SOME_NESTED_COMPOUND.BYTES, 0)
         child = t._items['Comp']
         data = t._items['shortTest']
 
@@ -372,7 +372,7 @@ class TestCache(unittest.TestCase):
     def test_invalidate(self):
         """ Invalidte should invalidate the whole ancestors chain
         """
-        t, *_ = TAG.parse(SOME_NESTED_COMPOUND.BYTES, 0)
+        t, *_ = parse(SOME_NESTED_COMPOUND.BYTES, 0)
         child1 = t._items['Comp']
         child2 = t._items['shortTest']
         data = child1._items['shortTest']
@@ -405,7 +405,7 @@ class TestCycleDetection(unittest.TestCase):
     )
 
     def setUp(self):
-        nbt, *_ = TAG.parse(self.DATA)
+        nbt, *_ = parse(self.DATA)
         self.root = nbt
         self.d1 = nbt.d1
         self.d2 = nbt.d2
@@ -446,8 +446,8 @@ class TestSetValue(unittest.TestCase):
     def test_set_value_compound(self):
         """ Compound items can be updated
         """
-        nbt, *_ = TAG.parse(SOME_COMPOUND.BYTES, 0)
-        val, *_ = TAG.parse(SOME_SHORT.BYTES, 0)
+        nbt, *_ = parse(SOME_COMPOUND.BYTES, 0)
+        val, *_ = parse(SOME_SHORT.BYTES, 0)
 
         nbt.x = val
         self.assertIn("x", nbt.keys())
@@ -456,8 +456,8 @@ class TestSetValue(unittest.TestCase):
     def test_copy(self):
         """ Items can be copied between compounds
         """
-        nbt, *_ = TAG.parse(SOME_COMPOUND.BYTES, 0)
-        other, *_ = TAG.parse(EMPTY_COMPOUND.BYTES, 0)
+        nbt, *_ = parse(SOME_COMPOUND.BYTES, 0)
+        other, *_ = parse(EMPTY_COMPOUND.BYTES, 0)
 
         other.x = nbt.shortTest
         self.assertIn("x", other.keys())
@@ -469,7 +469,7 @@ class TestWrite(unittest.TestCase):
         """ It should write back atomic values
         """
         data = SOME_SHORT.BYTES
-        nbt, name, _ = TAG.parse(data, 0)
+        nbt, name, _ = parse(data, 0)
 
         output = io.BytesIO()
         nbt.write_to(output, name)
@@ -480,7 +480,7 @@ class TestWrite(unittest.TestCase):
         """ It should write back compound values
         """
         data = SOME_NESTED_COMPOUND.BYTES
-        nbt, name, _ = TAG.parse(data, 0)
+        nbt, name, _ = parse(data, 0)
 
         output = io.BytesIO()
         nbt.write_to(output, name)
@@ -491,7 +491,7 @@ class TestWrite(unittest.TestCase):
         """ It should write changes
         """
         data = SOME_COMPOUND.BYTES
-        nbt, name, _ = TAG.parse(data, 0)
+        nbt, name, _ = parse(data, 0)
 
         nbt.shortTest = 0x1234
 
@@ -504,7 +504,7 @@ class TestWrite(unittest.TestCase):
         """ It should write items copied from other nbt
         """
         data = SOME_COMPOUND.BYTES
-        nbt, name, _ = TAG.parse(data, 0)
+        nbt, name, _ = parse(data, 0)
         nbt.otherShort = nbt.shortTest
 
         output = io.BytesIO()
@@ -519,14 +519,14 @@ class Versioning(unittest.TestCase):
         """
         with gzip.open(FILE['level.dat'], "rb") as f:
           data = f.read()
-          t, _, offset = TAG.parse(data, 0)
+          t, _, offset = parse(data, 0)
 
         self.assertEqual(t._version, 0)
 
     def test_version_update(self):
         """ Nested elements shoud track their parent as weak links
         """
-        t, *_ = TAG.parse(COMPOUND_FRAME(
+        t, *_ = parse(COMPOUND_FRAME(
             WITH_NAME("Data", COMPOUND_FRAME)(
               SHORT_FRAME(123, "a"),
               INT_FRAME(456, "b"),
@@ -555,22 +555,22 @@ class TestSave(unittest.TestCase):
         """ NBT tree parsed from file can be saved
             with their original name
         """
-        nbt = TAG.parse_file(FILE['copy.dat'])
+        nbt = parse_file(FILE['copy.dat'])
         self.assertNotEqual(nbt.Data.LevelName, 'copy')
         nbt.Data.LevelName='copy'
         nbt.save()
 
-        nbt = TAG.parse_file(FILE['copy.dat'])
+        nbt = parse_file(FILE['copy.dat'])
         self.assertEqual(nbt.Data.LevelName, 'copy')
 
     def test_2(self):
         """ NBT data from file act as a context manager to save changes
         """
-        with TAG.parse_file(FILE['copy.dat']) as nbt:
+        with parse_file(FILE['copy.dat']) as nbt:
             self.assertNotEqual(nbt.Data.LevelName, 'copy')
             nbt.Data.LevelName='copy'
 
-        with TAG.parse_file(FILE['copy.dat']) as nbt:
+        with parse_file(FILE['copy.dat']) as nbt:
             self.assertEqual(nbt.Data.LevelName, 'copy')
 
     def test_3(self):
@@ -579,7 +579,7 @@ class TestSave(unittest.TestCase):
         with open(FILE['copy.dat'], 'rb') as f:
             old_data = f.read()
 
-        with TAG.parse_file(FILE['copy.dat']) as nbt:
+        with parse_file(FILE['copy.dat']) as nbt:
             self.assertNotEqual(nbt.Data.LevelName, 'copy')
 
         with open(FILE['copy.dat'], 'rb') as f:
@@ -595,7 +595,7 @@ class TestClone(unittest.TestCase):
     )
 
     def setUp(self):
-        self.nbt, *_ = TAG.parse(self.DATA)
+        self.nbt, *_ = parse(self.DATA)
 
     def test_1(self):
         """ Compound can be cloned
