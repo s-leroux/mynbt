@@ -471,22 +471,29 @@ class Composite(Node):
 
         if value is not node:
             value.register_parent(self)
-            self._items[idx] = value
+            super(Node, self).__setitem__(idx, value)
 
         return value
     
-class ListNode(Composite, collections.abc.MutableSequence, collections.abc.Hashable):
+    @staticmethod
+    def withInvalidate(method):
+        def f(self, *args, **kwargs):
+            self.invalidate()
+            return method(self, *args, **kwargs)
+        return f
+
+class ListNode(Composite, list, collections.abc.Hashable):
     KeyOrIndexError = IndexError
 
     def __init__(self, *, trait, child_trait, payload, parent):
-        self._items = []
         self._child_trait = child_trait
         super().__init__(trait=trait, payload=payload, parent=parent)
+        list.__init__(self)
 
-    def __repr__(self):
-        return super().__repr__() + " {" +\
-                ", ".join(repr(item) for item in self._items) +\
-                "}"
+    # override mutable methods
+    for m in ('insert', 'append', 'extend'): # XXX Possibly other!
+        vars()[m] = Composite.withInvalidate(getattr(list, m))
+
 
     def __str__(self):
         return str(self.export())
@@ -496,17 +503,17 @@ class ListNode(Composite, collections.abc.MutableSequence, collections.abc.Hasha
     #------------------------------------
     def clone(self, parent=None):
         instance = self.__class__(trait=self._trait, child_trait=self._child_trait, payload=self._payload, parent=parent)
-        instance._items = [item.clone(parent=instance) for item in self._items]
+        instance.extend(item.clone(parent=instance) for item in self)
 
         return instance
 
     def children(self):
-        return enumerate(self._items)
+        return enumerate(self)
 
     def write_payload(self, output):
         output.write((self._child_trait.ID).to_bytes(1, 'big'))
-        output.write(len(self._items).to_bytes(4, 'big'))
-        for item in self._items:
+        output.write(len(self).to_bytes(4, 'big'))
+        for item in self:
             item.write_payload(output)
 
     #------------------------------------
@@ -526,39 +533,38 @@ class ListNode(Composite, collections.abc.MutableSequence, collections.abc.Hasha
     #------------------------------------
     def get(self, idx, default=None):
         try:
-            return self._items[int(idx)]
+            return list.__getitem__(self, int(idx))
         except:
             return default
 
     def __setitem__(self, idx, value):
+        idx = int(idx)
         if not isinstance(value, Node):
             value = self._child_trait.FACTORY(value, trait=self._child_trait)
 
         self.invalidate()
         value.register_parent(self)
-        self._items[idx] = value
+        list.__setitem__(self, idx, value)
 
     def __delitem__(self, idx):
+        idx = int(idx)
         self.invalidate()
         # using a WeakKeyDictionary we may emulate multibag and remove self
         # from the removed item parent list
-        del self._items[idx]
+        list.__delitem__(self, idx)
 
-    def __len__(self):
-        return len(self._items)
-
-    def insert(self, idx, value):
-        self.invalidate()
-        self._items.insert(idx, value)
-
-class CompoundNode(Composite, collections.abc.MutableMapping, collections.abc.Hashable):
+class CompoundNode(Composite, dict, collections.abc.Hashable):
     def __init__(self, *, trait, payload, parent):
         super().__init__(trait=trait, payload=payload, parent=parent)
-        self._items = {}
+        dict.__init__(self)
+
+    # override mutable methods
+    for m in (): # XXX To be defined
+        vars()[m] = Composite.withInvalidate(getattr(dict, m))
 
     def __repr__(self):
         return super().__repr__() + " {" +\
-                ", ".join(name + ": " + repr(item) for name, item in self._items.items()) +\
+                ", ".join(name + ": " + repr(item) for name, item in selfs.items()) +\
                 "}"
 
     def __str__(self):
@@ -569,15 +575,15 @@ class CompoundNode(Composite, collections.abc.MutableMapping, collections.abc.Ha
     #------------------------------------
     def clone(self, parent=None):
         instance = self.__class__(trait=self._trait, payload=self._payload, parent=parent)
-        instance._items = {k:v.clone(parent=instance) for k,v in self._items.items()}
+        instance.update({k:v.clone(parent=instance) for k,v in self.items()})
 
         return instance
 
     def children(self):
-        return sorted(self._items.items())
+        return sorted(self.items())
 
     def write_payload(self, output):
-        for name, item in self._items.items():
+        for name, item in self.items():
             item.write_to(output, name=name)
         output.write(b"\x00")
 
@@ -596,11 +602,8 @@ class CompoundNode(Composite, collections.abc.MutableMapping, collections.abc.Ha
     #------------------------------------
     # Mutable mapping interface
     #------------------------------------
-    def keys(self):
-        return self._items.keys()
-
     def get(self, idx, default=None):
-        return self._items.get(str(idx), default)
+        return dict.get(self, str(idx), default)
 
     def __setitem__(self, idx, value):
         idx = str(idx)
@@ -609,22 +612,16 @@ class CompoundNode(Composite, collections.abc.MutableMapping, collections.abc.Ha
             # Non-Node objects must be promoted.
             # if the new value replace an existing one, the value keep the same type
             # otherwise a compatible type is inferred
-            old = self._items.get(idx)
+            old = self.get(idx)
             trait = old._trait if old is not None else TYPE_TO_TRAIT[type(value)]
             value = trait.FACTORY(value, trait=trait)
 
         value.register_parent(self)
-        self._items[idx] = value
+        dict.__setitem__(self, idx, value)
 
     def __delitem__(self, idx):
         self.invalidate()
-        del self._items[idx]
-
-    def __len__(self):
-        return len(self._items)
-
-    def __iter__(self):
-        return self._items.__iter__()
+        dict.__delitem__(self, idx)
 
     #------------------------------------
     # Mutable object interface
@@ -694,7 +691,7 @@ class ListReader(Reader):
         items = []
         while count > 0:
           item, offset = child_trait.make_from_payload(base, offset, parent=container)
-          container._items.append(item) # direct access to the storage to bypass invalidate()
+          list.append(container, item) # direct access to the storage to bypass invalidate()
 
           count -= 1
 
@@ -710,7 +707,7 @@ class CompoundReader(Reader):
           item, name, offset = parse(base, offset, parent=container)
           if type(item) is End:
             break
-          container._items[name] = item # direct access to the storage to bypass invalidate()
+          dict.__setitem__(container, name, item) # direct access to the storage to bypass invalidate()
 
         container._payload = base[start:offset]
         return container, offset

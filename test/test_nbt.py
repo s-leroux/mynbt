@@ -254,7 +254,7 @@ class TestCompoundTag(unittest.TestCase):
     def test_nested_compound(self):
         t, name, _ = parse(SOME_NESTED_COMPOUND.BYTES, 0)
         self.assertEqual(name, 'Data')
-        child = t._items['Comp']
+        child = t['Comp']
 
     def test_path(self):
         t, *_ = parse(SOME_NESTED_COMPOUND.BYTES, 0)
@@ -362,20 +362,20 @@ class TestCache(unittest.TestCase):
         """ Nested elements shoud track their parent as weak links
         """
         t, *_ = parse(SOME_NESTED_COMPOUND.BYTES, 0)
-        child = t._items['Comp']
-        data = t._items['shortTest']
+        child = t['Comp']
+        data = t['shortTest']
 
         self.assertEqual([*child._parents], [t])
         del t
         self.assertEqual([*child._parents], [])
 
     def test_invalidate(self):
-        """ Invalidte should invalidate the whole ancestors chain
+        """ Invalidate should invalidate the whole ancestors chain
         """
         t, *_ = parse(SOME_NESTED_COMPOUND.BYTES, 0)
-        child1 = t._items['Comp']
-        child2 = t._items['shortTest']
-        data = child1._items['shortTest']
+        child1 = t['Comp']
+        child2 = t['shortTest']
+        data = child1['shortTest']
         child1.invalidate()
 
         # print(t)
