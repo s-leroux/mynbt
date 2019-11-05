@@ -1,6 +1,7 @@
 from mynbt.bitpack import unpack
 
 from pprint import pprint
+from array import array
 
 def idx2pos(idx):
     r,x = divmod(idx, 16)
@@ -13,11 +14,18 @@ def pos2idx(x,y,z):
 
 class Section:
     def __init__(self, cx, cy, cz, palette, blocks):
+        if palette == []:
+            palette=[dict(Name="minecraft:air")]
+        if not len(blocks):
+            blocks = array(blocks.typecode, (0 for i in range(4096)))
+
         self._cx = cx
         self._cy = cy
         self._cz = cz
         self._palette = palette
         self._blocks = blocks
+
+        assert len(blocks) == 4096
 
     @property
     def x(self):
@@ -53,12 +61,17 @@ class Section:
     def fill(self, xrange, yrange, zrange, **blockstate):
         """ Fill a range of blocks
         """
-        idx = self.block_state_index(**blockstate)
-        for x in xrange:
-            for y in yrange:
-                for z in zrange:
-                    self._blocks[pos2idx(x,y,z)] = idx
+        blk = self.block_state_index(**blockstate)
+        base = pos2idx(xrange.start, yrange.start, zrange.start)
         
+        seq = array(self._blocks.typecode, (blk for i in xrange))
+
+        for z in zrange:
+            idx = base
+            base += 256
+            for y in yrange:
+                self._blocks[idx:idx+len(xrange)] = seq
+                idx += 16
 
     def block_state_index(self, **blockstate):
         """ Returns the index in the palette of the given block state
