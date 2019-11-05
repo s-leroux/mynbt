@@ -40,7 +40,6 @@ class Section:
 
         return Section(cx, section['Y'], cz, palette, blocks)
 
-
     def block(self, x,y,z):
         """ Get block at (x,y,z) in section's coordinates
         """
@@ -51,3 +50,24 @@ class Section:
         block = self._blocks[pos2idx(x,y,z)]
         return self._palette[block]
 
+    def fill(self, xrange, yrange, zrange, **blockstate):
+        """ Fill a range of blocks
+        """
+        idx = self.block_state_index(**blockstate)
+        for x in xrange:
+            for y in yrange:
+                for z in zrange:
+                    self._blocks[pos2idx(x,y,z)] = idx
+        
+
+    def block_state_index(self, **blockstate):
+        """ Returns the index in the palette of the given block state
+        
+            If the block state is not already in the palette it is
+            added.
+        """
+        try:
+            return self._palette.index(blockstate)
+        except ValueError:
+            self._palette.append(blockstate)
+            return len(self._palette)-1

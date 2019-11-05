@@ -47,4 +47,26 @@ class TestSection(unittest.TestCase):
         block = self.section.block(47%16, 90%16, 31%16)
         self.assertEqual(block['Name'], "minecraft:stone")
 
+    def test_3(self):
+        """ block_state_index should return the index of existing blocks
+        """
+        for blk_name in ("minecraft:stone", "minecraft:air", "minecraft:obsidian"):
+            idx = self.section.block_state_index(Name=blk_name)
+            self.assertEqual(self.section._palette[idx]['Name'], blk_name)
 
+    def test_4(self):
+        """ Sections can fill block areas
+        """
+        xrange = range(5,10)
+        yrange = range(5,10)
+        zrange = range(5,10)
+        self.section.fill(xrange, yrange, zrange, Name="minecraft:dirt")
+        idx = self.section.block_state_index(Name="minecraft:dirt")
+        
+        pprint(self.section._blocks)
+        self.assertEqual(len([blk for blk in self.section._blocks if blk == idx]), len(xrange)*len(yrange)*len(zrange))
+     
+        for x in xrange:
+            for y in yrange:
+                for z in zrange:
+                    self.assertEqual(self.section.block(x,y,z)['Name'], "minecraft:dirt")
