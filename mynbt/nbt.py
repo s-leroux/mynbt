@@ -1,8 +1,9 @@
 import gzip
-from struct import pack, unpack, iter_unpack
+import struct
 from weakref import WeakSet
 import collections
 from collections.abc import Hashable, MutableSequence
+from array import array
 
 import io
 
@@ -28,11 +29,11 @@ class CircularReferenceError(NBTError):
 # Module functions
 # ====================================================================
 def parse_id(base, offset):
-    ID, = unpack('>B',bytes(base[offset:offset+1]))
+    ID, = struct.unpack('>B',bytes(base[offset:offset+1]))
     return ID,offset+1
 
 def parse_name(base, offset):
-    l, = unpack('>h',bytes(base[offset:offset+2]))
+    l, = struct.unpack('>h',bytes(base[offset:offset+2]))
     name = bytes(base[offset+2:offset+2+l]).decode("utf8")
     return name,offset+2+l
 
@@ -271,7 +272,7 @@ class Value(Node):
             This implementation assume `self` is
             a subclass of a native Python type
         """
-        return pack(self._trait.FORMAT, self)
+        return struct.pack(self._trait.FORMAT, self)
 
 class Integer(int, Value):
     def __new__(cls, value, **kwargs):
@@ -302,15 +303,17 @@ class String(str, Value):
 # ====================================================================
 # Arrays
 # ====================================================================
-class Array(Value):
+class Array(array, Value):
+    def __new__(cls, *, trait, **kwargs):
+        return array.__new__(cls, trait.FORMAT[-1]) # skip endianness
+
     def __init__(self, *, trait, payload = None, parent = None):
-        Node.__init__(self, trait = trait, payload = payload, parent = parent)
-        self._items = []
+        Value.__init__(self, trait = trait, payload = payload, parent = parent)
 
     @classmethod
     def fromValues(cls, values, *, trait, payload = None, parent = None):
         instance = cls(trait=trait, payload=payload, parent=parent)
-        instance._items = [Integer(v, trait=trait.TYPE, parent=instance) for v, in values]
+        array.extend(instance, (v for v, in values))
         return instance
 
 
@@ -319,17 +322,36 @@ class Array(Value):
     #------------------------------------
     def clone(self, parent=None):
         instance = self.__class__(trait=self._trait, payload=self._payload, parent=parent)
-        instance._items = self._items.copy()
+        instance.extend(self)
 
         return instance
 
     def children(self):
-        return enumerate(self._items)
+        return enumerate(Integer(v, trait=self._trait.TYPE, parent=self) for v in self)
 
     def write_payload(self, output):
-        output.write(len(self._items).to_bytes(4, 'big'))
-        for item in self._items:
-            item.write_payload(output)
+        output.write(len(self).to_bytes(4, 'big'))
+        # hack
+        view = memoryview(self)
+        SEGSIZE=min(1024, len(self)) # actually SEGSIZE is the sive in items, not bytes
+        buffer=bytearray(SEGSIZE*self._trait.SIZE)
+        fmt = self._trait.FORMAT
+        fmt += fmt[-1]*(SEGSIZE-1)
+        while len(view) > SEGSIZE:
+            head = view[:SEGSIZE]
+            view = view[SEGSIZE:]
+
+            struct.pack_into(fmt, buffer, 0, *head)
+            output.write(buffer)
+
+        remaining = len(view)
+
+        if remaining:
+            fmt = fmt[:remaining+1]
+            buffer = memoryview(buffer)[:remaining*self._trait.SIZE]
+            struct.pack_into(fmt, buffer, 0, *view)
+            output.write(buffer)
+
 
     #------------------------------------
     # Proxy interface
@@ -343,32 +365,16 @@ class Array(Value):
     def __hash__(self):
         return id(self)
 
-    #------------------------------------
-    # Mutable sequence interface
-    #------------------------------------
-    def __getitem__(self, idx):
-        node = self._items[idx]
-        value = node.value()
-
-        if value is not node:
-            value.register_parent(self)
-            self._items[idx] = value
-
-        return value
-
     def __setitem__(self, idx, value):
+        idx = int(idx)
         self.invalidate()
-        value.register_parent(self)
-        self._items[idx] = value # XXX should promote native values to _... ?
+        array.__setitem__(self, idx, value)
 
-    def __delitem__(self, idx):
-        self.invalidate()
-        # using a WeakKeyDictionary we may emulate multibag and remove self
-        # from the removed item parent list
-        del self._items[idx]
-
-    def __len__(self):
-        return len(self._items)
+    # def __delitem__(self, idx):
+    #     self.invalidate()
+    #     # using a WeakKeyDictionary we may emulate multibag and remove self
+    #     # from the removed item parent list
+    #     del self._items[idx]
 
     def insert(self, idx, value):
         self.invalidate()
@@ -425,17 +431,20 @@ class Proxy(Node):
 
 class AtomProxy(Proxy):
     def unpack(self):
-        return unpack(self._trait.FORMAT, self._payload)[0]
+        return struct.unpack(self._trait.FORMAT, self._payload)[0]
 
 class ArrayProxy(Proxy):
     def unpack(self):
-        return iter_unpack(self._trait.FORMAT, self._payload[4:])
+        return struct.iter_unpack(self._trait.FORMAT, self._payload[4:])
 
     #------------------------------------
     # Node interface
     #------------------------------------
     def children(self):
         return self.value().children()
+
+    def __iter__(self):
+        return self.value().__iter__()
 
 class StringProxy(Proxy):
     def unpack(self):
@@ -564,7 +573,7 @@ class CompoundNode(Composite, dict, collections.abc.Hashable):
 
     def __repr__(self):
         return super().__repr__() + " {" +\
-                ", ".join(name + ": " + repr(item) for name, item in selfs.items()) +\
+                ", ".join(name + ": " + repr(item) for name, item in self.items()) +\
                 "}"
 
     def __str__(self):
@@ -660,13 +669,13 @@ class AtomReader(Reader):
 
 class ArrayReader(Reader):
     def make_from_payload(self, base, offset, *, parent):
-        l, = unpack('>i',bytes(base[offset:offset+4]))
+        l, = struct.unpack('>i',bytes(base[offset:offset+4]))
         payload = base[offset:offset+4+l*self._trait.SIZE]
         return ArrayProxy(trait=self._trait, payload=payload, parent=parent),offset+4+l*self._trait.SIZE
 
 class StringReader(Reader):
     def make_from_payload(self, base, offset, *, parent):
-        l, = unpack('>h',bytes(base[offset:offset+2]))
+        l, = struct.unpack('>h',bytes(base[offset:offset+2]))
         payload = base[offset:offset+2+l]
         return StringProxy(trait=self._trait, payload=payload, parent=parent),offset+2+l
 
@@ -675,7 +684,7 @@ class ListReader(Reader):
         start = offset
 
         child_trait, offset = parse_tag(base, offset)
-        count, = unpack('>i',bytes(base[offset:offset+4]))
+        count, = struct.unpack('>i',bytes(base[offset:offset+4]))
         offset += 4
         # XXX Check implications of that statement:
         # """ If the length of the list is 0 or negative,

@@ -274,6 +274,31 @@ class TestCompoundTag(unittest.TestCase):
         with self.assertRaises(KeyError):
           self.assertEqual(nbt.Comp['shortTest'], 32767)
 
+class TestArray(unittest.TestCase):
+    def _test_array(self, frame, mod):
+        data = [i%mod for i in range(10000)]
+        frame = frame(data, name="")
+        a, *_ = parse(frame)
+        a = a.value() # Force data unpacking
+        a._payload = None # clear cache
+      
+        for i,j in zip(a, data):
+            self.assertEqual(i&(mod-1),j) # unsigned comparaison
+
+        output = io.BytesIO()
+        a.write_to(output)
+        self.assertEqual(bytes(output.getbuffer()), bytes(frame))
+
+    def test_byte_array(self):
+        self._test_array(BYTE_ARRAY_FRAME, 1<<8)
+
+    def test_int_array(self):
+        self._test_array(INT_ARRAY_FRAME, 1<<32)
+
+    def test_long_array(self):
+        self._test_array(LONG_ARRAY_FRAME, 1<<64)
+
+
 class TestExport(unittest.TestCase):
     CASES = (
       dict(dump=SOME_SHORT.BYTES, value=32767, extended={'type': 'TAG_Short', 'value': 32767}),

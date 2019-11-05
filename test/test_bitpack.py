@@ -47,9 +47,9 @@ class TestUnpack(unittest.TestCase):
             nbits += 1
             n //= 2
 
-        print(nbits)
-        print(data)
+        # print(nbits)
+        # print(data)
 
         result = unpack(nbits, 64, data)
-        print(result)
-        pprint([(idx2pos(n), palette[i]) for n, i in enumerate(result)])
+        # print(result)
+        # pprint([(idx2pos(n), palette[i]) for n, i in enumerate(result)])
