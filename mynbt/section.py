@@ -1,5 +1,16 @@
 from mynbt.bitpack import unpack
 
+from pprint import pprint
+
+def idx2pos(idx):
+    r,x = divmod(idx, 16)
+    y,z = divmod(r, 16)
+
+    return (x,y,z)
+
+def pos2idx(x,y,z):
+    return (y*16+z)*16+x
+
 class Section:
     def __init__(self, cx, cy, cz, palette, blocks):
         self._cx = cx
@@ -22,13 +33,21 @@ class Section:
 
     @classmethod
     def fromNBT(cls, cx, cz, section):
-        palette = section.get('Palette')
-        blockstates = section.get('BlockStates')
+        palette = section.get('Palette', {})
+        blockstates = section.get('BlockStates', [])
 
-        blocks = None
-        # blocks = unpack(len(palette).bit_length(), 64, section['BlockStates'])
+        blocks = unpack(max(4,len(palette).bit_length()), 64, blockstates)
 
-        return Section(cx, section.Y, cz, palette, blocks)
+        return Section(cx, section['Y'], cz, palette, blocks)
 
 
+    def block(self, x,y,z):
+        """ Get block at (x,y,z) in section's coordinates
+        """
+        assert 0 <= x < 16
+        assert 0 <= y < 16
+        assert 0 <= z < 16
+
+        block = self._blocks[pos2idx(x,y,z)]
+        return self._palette[block]
 

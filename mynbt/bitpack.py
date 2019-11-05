@@ -2,16 +2,6 @@ from array import array
 
 """ Pack/unpack bit fields
 """
-
-def idx2pos(idx):
-    r,x = divmod(idx, 16)
-    y,z = divmod(r, 16)
-
-    return (x,y,z)
-
-def pos2idx(x,y,z):
-    return (y*16+z)*16+x
-
 def unpack(nbits, size, data):
     """ split data in nbits chunks
 

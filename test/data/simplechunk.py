@@ -258,4 +258,5 @@ SECTION = {'BlockStates': [1229782938247303441,
              {'Name': 'minecraft:sand'},
              {'Name': 'minecraft:magma_block'},
              {'Name': 'minecraft:glass'},
-             {'Name': 'minecraft:stone'}]}
+             {'Name': 'minecraft:stone'}],
+ 'Y': 5}

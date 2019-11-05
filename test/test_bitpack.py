@@ -6,21 +6,6 @@ from array import array
 
 from test.data.simplechunk import SECTION
 
-class TestUtils(unittest.TestCase):
-    def test_1(self):
-        """ pos2idx and idx2pos should perform
-            reverse operations
-        """
-        for t in ((0,0,0), (1,2,3), (15,15,15)):
-            self.assertEqual(t, idx2pos(pos2idx(*t)))
-
-    def test_2(self):
-        """ pos2idx should convert X,Y,Z positions to indices
-        """
-        for k,v in {0:(0,0,0), 1+2*256+3*16: (1,2,3)}.items():
-            self.assertEqual(k, pos2idx(*v))
-            self.assertEqual(v, idx2pos(k))
-
 class TestUnpack(unittest.TestCase):
     def test_1(self):
         """ Unpack should start decoding from the LSB
