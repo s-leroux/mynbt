@@ -444,7 +444,40 @@ class StringProxy(Proxy):
 # ====================================================================
 # Composites
 # ====================================================================
-class ListNode(Node, collections.abc.MutableSequence, collections.abc.Hashable):
+class Composite(Node):
+    KeyOrIndexError = KeyError
+
+    #------------------------------------
+    # Managing ancestors chain
+    #------------------------------------
+    def register_parent(self,parent):
+        # Only composite nodes can induce circular references
+        if parent.has_ancestor(self):
+            raise CircularReferenceError()
+
+        super().register_parent(parent)
+
+    #------------------------------------
+    # Mutable sequence interface
+    #------------------------------------
+    def __getitem__(self, idx):
+        sentinelle = object()
+
+        node = self.get(idx, sentinelle)
+        if node is sentinelle:
+            raise self.KeyOrIndexError(idx)
+
+        value = node.value()
+
+        if value is not node:
+            value.register_parent(self)
+            self._items[idx] = value
+
+        return value
+    
+class ListNode(Composite, collections.abc.MutableSequence, collections.abc.Hashable):
+    KeyOrIndexError = IndexError
+
     def __init__(self, *, trait, child_trait, payload, parent):
         self._items = []
         self._child_trait = child_trait
@@ -477,16 +510,6 @@ class ListNode(Node, collections.abc.MutableSequence, collections.abc.Hashable):
             item.write_payload(output)
 
     #------------------------------------
-    # Managing ancestors chain
-    #------------------------------------
-    def register_parent(self,parent):
-        # Only composite nodes can induce circular references
-        if parent.has_ancestor(self):
-            raise CircularReferenceError()
-
-        super().register_parent(parent)
-
-    #------------------------------------
     # Proxy interface
     #------------------------------------
     def value(self):
@@ -501,15 +524,11 @@ class ListNode(Node, collections.abc.MutableSequence, collections.abc.Hashable):
     #------------------------------------
     # Mutable sequence interface
     #------------------------------------
-    def __getitem__(self, idx):
-        node = self._items[idx]
-        value = node.value()
-
-        if value is not node:
-            value.register_parent(self)
-            self._items[idx] = value
-
-        return value
+    def get(self, idx, default=None):
+        try:
+            return self._items[int(idx)]
+        except:
+            return default
 
     def __setitem__(self, idx, value):
         if not isinstance(value, Node):
@@ -532,7 +551,7 @@ class ListNode(Node, collections.abc.MutableSequence, collections.abc.Hashable):
         self.invalidate()
         self._items.insert(idx, value)
 
-class CompoundNode(Node, collections.abc.MutableMapping, collections.abc.Hashable):
+class CompoundNode(Composite, collections.abc.MutableMapping, collections.abc.Hashable):
     def __init__(self, *, trait, payload, parent):
         super().__init__(trait=trait, payload=payload, parent=parent)
         self._items = {}
@@ -563,16 +582,6 @@ class CompoundNode(Node, collections.abc.MutableMapping, collections.abc.Hashabl
         output.write(b"\x00")
 
     #------------------------------------
-    # Managing ancestors chain
-    #------------------------------------
-    def register_parent(self,parent):
-        # Only composite nodes can induce circular references
-        if parent.has_ancestor(self):
-            raise CircularReferenceError()
-
-        super().register_parent(parent)
-
-    #------------------------------------
     # Proxy interface
     #------------------------------------
     def value(self):
@@ -590,16 +599,8 @@ class CompoundNode(Node, collections.abc.MutableMapping, collections.abc.Hashabl
     def keys(self):
         return self._items.keys()
 
-    def __getitem__(self, idx):
-        idx = str(idx)
-        node = self._items[idx]
-        value = node.value()
-
-        if value is not node:
-            value.register_parent(self)
-            self._items[idx] = value
-
-        return value
+    def get(self, idx, default=None):
+        return self._items.get(str(idx), default)
 
     def __setitem__(self, idx, value):
         idx = str(idx)
