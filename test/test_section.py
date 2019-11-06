@@ -63,7 +63,6 @@ class TestSection(unittest.TestCase):
         self.section.fill(xrange, yrange, zrange, Name="minecraft:dirt")
         idx = self.section.block_state_index(Name="minecraft:dirt")
         
-        pprint(self.section._blocks)
         self.assertEqual(len([blk for blk in self.section._blocks if blk == idx]), len(xrange)*len(yrange)*len(zrange))
      
         for x in xrange:

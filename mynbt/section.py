@@ -27,6 +27,12 @@ class Section:
 
         assert len(blocks) == 4096
 
+    def __repr__(self):
+        return "Section({_cx},{_cy},{_cz},{_palette},{_blocks})".format(**vars(self))
+
+    def __str__(self):
+        return "Section({_cx},{_cy},{_cz})".format(**vars(self))
+
     @property
     def x(self):
         return self._cx
@@ -46,7 +52,11 @@ class Section:
 
         blocks = unpack(max(4,(len(palette)-1).bit_length()), 64, blockstates)
 
-        return Section(cx, section['Y'], cz, palette, blocks)
+        return cls(cx, section['Y'], cz, palette, blocks)
+
+    @classmethod
+    def new(cls, cx, cy, cz):
+        return cls(cx, cy, cz, [], array('H'))
 
     def block(self, x,y,z):
         """ Get block at (x,y,z) in section's coordinates

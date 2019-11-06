@@ -13,7 +13,10 @@ class WithSectionAccessor:
 
         def __getitem__(self, idx):
             # XXX Should try and return a new section if not found
-            return next(self._nbt.sections(filter=lambda section : section.Y == idx))
+            try:
+                return next(self._nbt.sections(filter=lambda section : section.Y == idx))
+            except StopIteration:
+                return Section.new(self._nbt.Level.xPos, idx, self._nbt.Level.zPos)
 
     section = property(SectionAccessor)
 
