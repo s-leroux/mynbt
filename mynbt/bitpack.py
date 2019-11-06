@@ -10,10 +10,11 @@ def unpack(nbits, size, data):
     dest = array('H')
 
     mask = (1<<nbits)-1
+    umask = (1<<size)-1 # mask to avoid sign bit extension
     remaining = 0
     acc = 0
     for n in data:
-        acc |= (n << remaining)
+        acc |= ((n&umask) << remaining)
         remaining += size
 
         while remaining >= nbits:
@@ -21,8 +22,7 @@ def unpack(nbits, size, data):
             remaining -= nbits
             acc >>= nbits
 
-
-    assert not acc
+    assert not acc, "unexpected trailing data {} [{} of {}]".format(bin(acc), remaining, nbits)
 
     return dest
 
