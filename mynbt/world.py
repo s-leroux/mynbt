@@ -135,3 +135,22 @@ class World:
         for player in self._locator.players():
             with parse_file(player) as p:
                 yield p
+
+    #------------------------------------
+    # World modifications
+    #------------------------------------
+    def apply(self, fct, xrange, yrange, zrange, *args, **kwargs):
+        """ Apply a function to an area of the world
+        """
+        for (rx, ry), chunks in partition(xrange, yrange, zrange).items():
+            with self.region(rx, ry) as region:
+                for (cx, cz), sections in chunks.items():
+                    with region.chunk[cx,cz].parse() as nbt:
+                        for cy, *span in sections:
+                            section = nbt.section[cy]
+                            fct(section, *span, *args, **kwargs)
+
+    def fill(self, xrange, yrange, zrange, **block):
+        """ Fill an area of the world
+        """
+        self.apply(Section.fill, xrange, yrange, zrange, **block)

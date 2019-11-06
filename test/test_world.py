@@ -3,6 +3,7 @@ import os.path
 from pprint import pprint
 
 import mynbt.world as world
+from mynbt.section import Section
 
 MC_SAMPLE_WORLD=os.path.join('test','data','MC-1_14_4-World')
 
@@ -145,3 +146,23 @@ class TestWorld(unittest.TestCase):
         # XXX How to test that exactly?
         for player in self.world.players():
             _ = (player.filepath, player.Data.Version, [player.Data.SpawnX, player.Data.SpawnY, player.Data.SpawnZ])
+
+    def test_4(self):
+        """ It can apply an arbitrary function in all section of a range
+        """
+        l = []
+        params = dict(Name="minecraft:dirt")
+
+        def acc(section, *args, **kwargs):
+          l.append((str(section), args, kwargs))
+
+          self.assertIsInstance(section, Section)
+          self.assertEqual(kwargs, params)
+          for span in args[:3]:
+              self.assertTrue(0 <= span.start <= span.stop <= 16, span)
+
+
+        self.world.apply(acc, range(-1, 33), range(0, 32), range(100, 122), **params)
+
+        self.assertEqual(len(l), 16)
+
