@@ -6,6 +6,100 @@ import mynbt.world as world
 
 MC_SAMPLE_WORLD=os.path.join('test','data','MC-1_14_4-World')
 
+class TestUtilities(unittest.TestCase):
+    def test_1(self):
+        """ `partition` can split a range in world coordinates
+            to a sequence of regions/chunk/sections
+        """
+
+        CASES=(
+          dict(
+              input=(range(1,8), range(2,7), range(3,6)),
+              output={
+                  (0,0): {
+                      (0,0): [
+                        (0, range(1,8),range(2,7), range(3,6))
+                      ]
+                  }
+              },
+          ),
+          dict(
+              input=(range(-16,0), range(1,16), range(-16, -2)),
+              output={
+                  (-1,-1): {
+                      (31,31): [
+                        (0, range(0,16), range(1,16), range(0,14))
+                      ]
+                  }
+              },
+          ),
+          dict(
+              input=(range(-8,-1), range(2,7), range(-6-32*16, -3-32*16)),
+              output={
+                  (-1,-2): {
+                      (31,31): [
+                        (0, range(8,15), range(2,7), range(10,13))
+                      ]
+                  }
+              },
+          ),
+          dict(
+              input=(range(1,22), range(2,7), range(3,6)),
+              output={
+                  (0,0): {
+                      (0,0): [
+                        (0, range(1,16),range(2,7), range(3,6)),
+                      ],
+                      (1,0): [
+                        (0, range(0,6),range(2,7), range(3,6)),
+                      ],
+                  }
+              },
+          ),
+          dict(
+              input=(range(1,22), range(2,17), range(3,6)),
+              output={
+                  (0,0): {
+                      (0,0): [
+                        (0, range(1,16),range(2,16), range(3,6)),
+                        (1, range(1,16),range(0,1), range(3,6)),
+                      ],
+                      (1,0): [
+                        (0, range(0,6),range(2,16), range(3,6)),
+                        (1, range(0,6),range(0,1), range(3,6)),
+                      ],
+                  }
+              },
+          ),
+          dict(
+              input=(range(1,22), range(2,17), range(3,18)),
+              output={
+                  (0,0): {
+                      (0,0): [
+                        (0, range( 1,16),range( 2,16), range( 3,16)),
+                        (1, range( 1,16),range( 0, 1), range( 3,16)),
+                      ],
+                      (1,0): [
+                        (0, range( 0, 6),range( 2,16), range( 3,16)),
+                        (1, range( 0, 6),range( 0, 1), range( 3,16)),
+                      ],
+                      (0,1): [
+                        (0, range( 1,16),range( 2,16), range( 0, 2)),
+                        (1, range( 1,16),range( 0, 1), range( 0, 2)),
+                      ],
+                      (1,1): [
+                        (0, range( 0, 6),range( 2,16), range( 0, 2)),
+                        (1, range( 0, 6),range( 0, 1), range( 0, 2)),
+                      ],
+                  }
+              },
+          ),
+        )
+
+        for case in CASES:
+            result = world.partition(*case['input'])
+            self.assertEqual(result, case['output'], case['input'])
+
 class TestLocator(unittest.TestCase):
     def setUp(self):
         self.locator = world.Locator('.')

@@ -27,6 +27,55 @@ def Locator(dirname):
     ))
 
 # ====================================================================
+# Utilities
+# ====================================================================
+def partition(xrange, yrange, zrange):
+    """ Split the given x/y/z ranges expressed in world coordinate system
+        in region/chunk/section/range-in-section
+    """
+    x = _partition(xrange)
+    y = _partition(yrange)
+    z = _partition(zrange)
+
+    result={}
+    for rx,vx in x.items():
+        for rz,vz in z.items():
+            result[rx,rz] = chunks = {}
+            for (cx, x_span) in vx:
+                for (cz, z_span) in vz:
+                    chunks[cx, cz] = [(cy, x_span,y_span,z_span) for ry,vy in y.items() for (cy, y_span) in vy]
+
+    return result
+
+def _partition(xrange):
+    result = {}
+
+    lx = xrange.stop-xrange.start
+    if lx <= 0:
+        return result
+
+    cx, ix = divmod(xrange.start, 16)
+    rx, cx = divmod(cx, 32)
+
+    l = None
+
+    while lx > 0:
+        if l is None:
+            l = result.setdefault(rx, [])
+        l.append((cx, range(ix, min(ix+lx, 16))))
+        lx -= 16-ix
+        ix = 0
+        if cx == 31:
+            cx = 0
+            rx += 1
+            l = None
+        else:
+            cx += 1
+
+    return result
+
+
+# ====================================================================
 # World
 # ====================================================================
 class World:
