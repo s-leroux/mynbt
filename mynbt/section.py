@@ -44,7 +44,7 @@ class Section:
         palette = section.get('Palette', {})
         blockstates = section.get('BlockStates', [])
 
-        blocks = unpack(max(4,len(palette).bit_length()), 64, blockstates)
+        blocks = unpack(max(4,(len(palette)-1).bit_length()), 64, blockstates)
 
         return Section(cx, section['Y'], cz, palette, blocks)
 
