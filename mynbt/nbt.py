@@ -282,6 +282,27 @@ class Integer(int, Value):
     def __init__(self, value, *, trait = None, payload = None, parent = None):
         Node.__init__(self, trait = trait or IntTrait, payload = payload, parent = parent)
 
+    #------------------------------------
+    # Converion from native objects
+    #------------------------------------
+    @classmethod
+    def fromNativeObject(cls, value, *, typecode='>h', parent=None):
+        value = int(value)
+
+        TYPECODES = { trait.FORMAT[-1] : trait for trait in (
+            ByteTrait,
+            ShortTrait,
+            IntTrait,
+            LongTrait
+        ) }
+
+        try:
+            trait = TYPECODES[typecode[-1]]
+        except KeyError:
+            raise ValueError("Typecode should be one of {}, not {}".format(tuple(TYPECODES.keys()), typecode[-1]))
+
+        return cls(value, trait=trait, parent=parent)
+
 class Float(float, Value):
     def __new__(cls, value, **kwargs):
         return float.__new__(cls, value)
@@ -289,12 +310,38 @@ class Float(float, Value):
     def __init__(self, value, *, trait = None, payload = None, parent = None):
         Node.__init__(self, trait = trait or DoubleTrait, payload = payload, parent = parent)
 
+    #------------------------------------
+    # Converion from native objects
+    #------------------------------------
+    @classmethod
+    def fromNativeObject(cls, value, *, typecode='>d', parent=None):
+        value = float(value)
+
+        TYPECODES = { trait.FORMAT[-1] : trait for trait in (
+            FloatTrait,
+            DoubleTrait,
+        ) }
+
+        try:
+            trait = TYPECODES[typecode[-1]]
+        except KeyError:
+            raise ValueError("Typecode should be one of {}, not {}".format(tuple(TYPECODES.keys()), typecode[-1]))
+
+        return cls(value, trait=trait, parent=parent)
+
 class String(str, Value):
     def __new__(cls, value, **kwargs):
         return str.__new__(cls, value)
 
     def __init__(self, value, *, trait = None, payload = None, parent = None):
         Node.__init__(self, trait = trait or StringTrait, payload = payload, parent = parent)
+
+    #------------------------------------
+    # Converion from native objects
+    #------------------------------------
+    @classmethod
+    def fromNativeObject(cls, obj, *, parent=None):
+        return cls(str(obj), parent=parent)
 
     def pack(self):
         data = self.encode('utf8')
@@ -321,7 +368,7 @@ class Array(array, Value):
     # Converion from native objects
     #------------------------------------
     @classmethod
-    def fromNativeObject(cls, sequence, typecode=None):
+    def fromNativeObject(cls, sequence, *, typecode=None, parent=None):
         try:
             typecode = sequence.typecode
         except AttributeError:
@@ -339,7 +386,7 @@ class Array(array, Value):
         except KeyError:
             raise ValueError("Typecode should be one of {}, not {}".format(tuple(TYPECODES.keys()), typecode[-1]))
 
-        instance = cls(trait=trait)
+        instance = cls(trait=trait, parent=parent)
         array.extend(instance, sequence)
 
         return instance
@@ -681,8 +728,8 @@ class CompoundNode(Composite, dict, collections.abc.Hashable):
     # Converion from native objects
     #------------------------------------
     @classmethod
-    def fromNativeObject(cls, dict_like_object):
-        return CompoundNode(dict_like_object)
+    def fromNativeObject(cls, dict_like_object, *, parent=None):
+        return CompoundNode(dict_like_object, parent=parent)
 
 
     #------------------------------------

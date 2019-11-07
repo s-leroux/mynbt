@@ -296,6 +296,30 @@ class TestConversionFromNativeObjects(unittest.TestCase):
         name = _.__name__ = "test_array_" + typecode
         vars()[name] = _
 
+    for typecode in ('b', 'h', 'i', 'q', '>b', '>h', '>i', '>q'):
+        def _(self, typecode=typecode):
+            native = 123
+
+            node = Integer.fromNativeObject(native, typecode=typecode)
+
+            self.assertIsInstance(node, Integer)
+            self.assertEqual(native, node)
+
+        name = _.__name__ = "test_integer_" + typecode
+        vars()[name] = _
+
+    for typecode in ('f', 'd', '>f', '>d'):
+        def _(self, typecode=typecode):
+            native = 123.456
+
+            node = Float.fromNativeObject(native, typecode=typecode)
+
+            self.assertIsInstance(node, Float)
+            self.assertEqual(native, node)
+
+        name = _.__name__ = "test_integer_" + typecode
+        vars()[name] = _
+
 
 class TestArray(unittest.TestCase):
     def _test_array(self, frame, mod):
