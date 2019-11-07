@@ -317,6 +317,32 @@ class Array(array, Value):
         array.extend(instance, (v for v, in values))
         return instance
 
+    #------------------------------------
+    # Converion from native objects
+    #------------------------------------
+    @classmethod
+    def fromNativeObject(cls, sequence, typecode=None):
+        try:
+            typecode = sequence.typecode
+        except AttributeError:
+            if typecode is None:
+                raise ValueError("typecode must be set if the sequence doesn't provide it")
+
+        TYPECODES = { trait.FORMAT[-1] : trait for trait in (
+            ByteArrayTrait,
+            IntArrayTrait,
+            LongArrayTrait
+        ) }
+
+        try:
+            trait = TYPECODES[typecode[-1]]
+        except KeyError:
+            raise ValueError("Typecode should be one of {}, not {}".format(tuple(TYPECODES.keys()), typecode[-1]))
+
+        instance = cls(trait=trait)
+        array.extend(instance, sequence)
+
+        return instance
 
     #------------------------------------
     # Node interface
@@ -632,9 +658,12 @@ class ListNode(Composite, list, collections.abc.Hashable):
         list.__delitem__(self, idx)
 
 class CompoundNode(Composite, dict, collections.abc.Hashable):
-    def __init__(self, *, trait, payload, parent):
+    def __init__(self, content={}, *, trait=None, payload=None, parent=None):
+        if trait is None:
+            trait = CompoundTrait
+
         super().__init__(trait=trait, payload=payload, parent=parent)
-        dict.__init__(self)
+        dict.__init__(self, content)
 
     # override mutable methods
     for m in (): # XXX To be defined
@@ -647,6 +676,14 @@ class CompoundNode(Composite, dict, collections.abc.Hashable):
 
     def __str__(self):
         return str(self.export())
+
+    #------------------------------------
+    # Converion from native objects
+    #------------------------------------
+    @classmethod
+    def fromNativeObject(cls, dict_like_object):
+        return CompoundNode(dict_like_object)
+
 
     #------------------------------------
     # Node interface
