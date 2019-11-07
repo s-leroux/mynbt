@@ -1,6 +1,7 @@
 import unittest
 import shutil
 import os.path
+import array
 
 from mynbt.nbt import *
 from test.data.nbt import *
@@ -274,6 +275,27 @@ class TestCompoundTag(unittest.TestCase):
         self.assertEqual(nbt.Comp['byteTest'], 127)
         with self.assertRaises(KeyError):
           self.assertEqual(nbt.Comp['shortTest'], 32767)
+
+class TestConversionFromNativeObjects(unittest.TestCase):
+    def test_compound_node(self):
+        native = dict(A=1,B="b")
+        node = CompoundNode.fromNativeObject(native)
+
+        self.assertIsInstance(node, CompoundNode)
+        self.assertEqual(native, node)
+
+    for typecode in ('b', 'i', 'q'):
+        def _(self, typecode=typecode):
+            native =  array(typecode, (i % 256 - 128 for i in range(1000)))
+
+            node = Array.fromNativeObject(native)
+
+            self.assertIsInstance(node, Array)
+            self.assertSequenceEqual(native, node)
+
+        name = _.__name__ = "test_array_" + typecode
+        vars()[name] = _
+
 
 class TestArray(unittest.TestCase):
     def _test_array(self, frame, mod):
