@@ -10,6 +10,7 @@ import io
 from mynbt.visitor import Visitor, Exporter
 from mynbt.error import *
 from mynbt.utils import patch,withsave
+import mynbt.bitpack as bitpack
 
 # ====================================================================
 # Errors
@@ -330,13 +331,17 @@ class Array(array, Value):
         return enumerate(Integer(v, trait=self._trait.TYPE, parent=self) for v in self)
 
     def write_payload(self, output):
-        output.write(len(self).to_bytes(4, 'big'))
+        self._write_payload(self._trait.SIZE, self, output)
+
+    @staticmethod
+    def _write_payload(size, data, output):
+        count = len(data)
+        output.write(count.to_bytes(4, 'big'))
         # hack
-        view = memoryview(self)
-        SEGSIZE=min(1024, len(self)) # actually SEGSIZE is the sive in items, not bytes
-        buffer=bytearray(SEGSIZE*self._trait.SIZE)
-        fmt = self._trait.FORMAT
-        fmt += fmt[-1]*(SEGSIZE-1)
+        view = memoryview(data)
+        SEGSIZE=min(1024, count) # actually SEGSIZE is the sive in items, not bytes
+        buffer=bytearray(SEGSIZE*size)
+        fmt = ">" + {8:'q', 4:'i', 2:'h', 1:'b'}[size]*SEGSIZE
         while len(view) > SEGSIZE:
             head = view[:SEGSIZE]
             view = view[SEGSIZE:]
@@ -348,10 +353,9 @@ class Array(array, Value):
 
         if remaining:
             fmt = fmt[:remaining+1]
-            buffer = memoryview(buffer)[:remaining*self._trait.SIZE]
+            buffer = memoryview(buffer)[:remaining*size]
             struct.pack_into(fmt, buffer, 0, *view)
             output.write(buffer)
-
 
     #------------------------------------
     # Proxy interface
@@ -380,6 +384,71 @@ class Array(array, Value):
         self.invalidate()
         self._items.insert(idx, value)
 
+    #------------------------------------
+    # Hashable interface
+    #------------------------------------
+    def toBitPack(self, nbits, parent = None):
+        """ Unpack the data in the array to build a BitPack.
+
+            `nbits` is either an integer holding the size in bits
+            of each item, or a nullary function returning that value.
+        """
+        return BitPack(nbits, self, parent=parent)
+
+# ====================================================================
+# Bit packs
+# ====================================================================
+class BitPack(array, Value):
+    """ BitPacks are special kind of arrays where fixed bit-length
+        values are packed into 64 bits integers
+
+        The NBT parser never automaticcally build a bit pack. It
+        must be explicitly instancited from a sequence. As an helper,
+        the Array class provides the `toBitPack` method.
+
+        `nbits` is either an integer holding the size in bits
+        of each item, or a nullary function returning that value.
+    """
+    def __new__(cls, *args, **kwargs):
+        return array.__new__(cls, 'H')
+
+    def __init__(self, nbits, src,*, parent = None):
+        """ Initialize a BitPack.
+
+            `src` is  assumed to be an `array.array` object
+        """
+        nbits_f = nbits if callable(nbits) else lambda: nbits
+
+        Value.__init__(self, trait = LongArrayTrait, payload = None, parent = parent)
+        bitpack.unpack(nbits_f(), src.itemsize*8, src, self)
+        self._nbits_f = nbits_f
+
+    #------------------------------------
+    # Node interface
+    #------------------------------------
+    def clone(self, parent=None):
+        instance = self.__class__(self._nbits_f(), self, parent=parent)
+
+        return instance
+
+    def children(self):
+        return () # It is not obvious if BitPack should be enumerable
+
+    def write_payload(self, output):
+        data = bitpack.pack(64, self._nbits_f(), self)
+        Array._write_payload(8, data, output)
+
+    #------------------------------------
+    # Proxy interface
+    #------------------------------------
+    def value(self):
+        return self
+
+    #------------------------------------
+    # Hashable interface
+    #------------------------------------
+    def __hash__(self):
+        return id(self)
 
 # ====================================================================
 # Proxy
@@ -483,7 +552,7 @@ class Composite(Node):
             super(Node, self).__setitem__(idx, value)
 
         return value
-    
+
     @staticmethod
     def withInvalidate(method):
         def f(self, *args, **kwargs):
@@ -753,6 +822,9 @@ class Trait(metaclass=TraitMetaclass):
         """ Call the most specialized visitor method for this node
         """
         return visitor.__getattribute__(cls.VISIT)();
+
+class NoTrait(Trait):
+    pass
 
 class AtomTrait(Trait):
     READER = AtomReader

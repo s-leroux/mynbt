@@ -4,6 +4,7 @@ import os.path
 
 from mynbt.nbt import *
 from test.data.nbt import *
+from pprint import pprint
 
 FILE = {
   'level.dat': os.path.join('test','data','level.dat'),
@@ -298,6 +299,43 @@ class TestArray(unittest.TestCase):
     def test_long_array(self):
         self._test_array(LONG_ARRAY_FRAME, 1<<64)
 
+class TestBitPack(unittest.TestCase):
+    def test_1(self):
+        frame = LONG_ARRAY_FRAME([0x12345678FFF0A987]*100, name="")
+        arr, *_ = parse(frame)
+        arr = arr.value()
+
+        bp = arr.toBitPack(4)
+
+        for word in bp[0::16]:
+            self.assertEqual(word, 0x07)
+        for word in bp[1::16]:
+            self.assertEqual(word, 0x08)
+        for word in bp[2::16]:
+            self.assertEqual(word, 0x09)
+        for word in bp[3::16]:
+            self.assertEqual(word, 0x0A)
+        for word in bp[4::16]:
+            self.assertEqual(word, 0x00)
+        for word in bp[5::16]:
+            self.assertEqual(word, 0x0F)
+        for word in bp[6::16]:
+            self.assertEqual(word, 0x0F)
+        for word in bp[7::16]:
+            self.assertEqual(word, 0x0F)
+
+    def test_2(self):
+        frame = LONG_ARRAY_FRAME([0x12345678FFF0A987]*100, name="")
+        arr, *_ = parse(frame)
+        arr = arr.value()
+
+        bp = arr.toBitPack(4)
+
+        output = io.BytesIO()
+        bp.write_to(output)
+        result = bytes(output.getbuffer())
+
+        self.assertEqual(frame, result)
 
 class TestExport(unittest.TestCase):
     CASES = (

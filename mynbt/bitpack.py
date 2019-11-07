@@ -2,12 +2,13 @@ from array import array
 
 """ Pack/unpack bit fields
 """
-def unpack(nbits, size, data):
+def unpack(nbits, size, data, dest=None):
     """ split data in nbits chunks
 
         data is an iterator on fixed size ints
     """
-    dest = array('H')
+    if dest is None:
+        dest = array('H')
 
     mask = (1<<nbits)-1
     umask = (1<<size)-1 # mask to avoid sign bit extension
