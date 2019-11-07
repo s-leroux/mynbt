@@ -3,6 +3,7 @@ import os.path
 import glob
 
 from mynbt.region import Region
+from mynbt.section import Section
 from mynbt.poi import POI
 from mynbt.nbt import parse_file
 
@@ -76,6 +77,52 @@ def _partition(xrange):
 
 
 # ====================================================================
+# ChangeSet
+# ====================================================================
+class ChangeSet:
+    """ Cache region so region files are not written after every
+        single changes
+    """
+
+    def __init__(self, world):
+        self._world = world
+        self._cache = {}
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        for region in self._cache.values():
+            region.__exit__(*args)
+
+    def region(self, rx, rz):
+        try:
+            result = self._cache[rx,rz]
+        except KeyError:
+            result = self._cache[rx,rz] = self._world.region(rx,rz, factory=Region.withCache())
+
+        return result
+
+    #------------------------------------
+    # World modifications
+    #------------------------------------
+    def apply(self, fct, xrange, yrange, zrange, *args, **kwargs):
+        """ Apply a function to an area of the world
+        """
+        for (rx, ry), chunks in partition(xrange, yrange, zrange).items():
+            with self.region(rx, ry) as region:
+                for (cx, cz), sections in chunks.items():
+                    with region.chunk[cx,cz].parse() as nbt:
+                        for cy, *span in sections:
+                            section = nbt.section[cy]
+                            fct(section, *span, *args, **kwargs)
+
+    def fill(self, xrange, yrange, zrange, **block):
+        """ Fill an area of the world
+        """
+        self.apply(Section.fill, xrange, yrange, zrange, **block)
+
+# ====================================================================
 # World
 # ====================================================================
 class World:
@@ -100,8 +147,8 @@ class World:
         """
         return World.fromSaveFolder(MINECRAFT_HOME, worldname)
 
-    def region(self, rx, rz):
-        return Region.fromFile(rx, rz, self._locator.region(rx,rz))
+    def region(self, rx, rz, factory=None):
+        return Region.fromFile(rx, rz, self._locator.region(rx,rz), factory=factory)
 
     def poi(self, rx, rz):
         return POI.fromFile(rx, rz, self._locator.region(rx,rz))
@@ -129,6 +176,10 @@ class World:
 
         raise NotImplementedError
 
+    @property
+    def editor(self):
+        return ChangeSet(self)
+
     def players(self):
         """ Itertor over the player's data
         """
@@ -136,21 +187,3 @@ class World:
             with parse_file(player) as p:
                 yield p
 
-    #------------------------------------
-    # World modifications
-    #------------------------------------
-    def apply(self, fct, xrange, yrange, zrange, *args, **kwargs):
-        """ Apply a function to an area of the world
-        """
-        for (rx, ry), chunks in partition(xrange, yrange, zrange).items():
-            with self.region(rx, ry) as region:
-                for (cx, cz), sections in chunks.items():
-                    with region.chunk[cx,cz].parse() as nbt:
-                        for cy, *span in sections:
-                            section = nbt.section[cy]
-                            fct(section, *span, *args, **kwargs)
-
-    def fill(self, xrange, yrange, zrange, **block):
-        """ Fill an area of the world
-        """
-        self.apply(Section.fill, xrange, yrange, zrange, **block)

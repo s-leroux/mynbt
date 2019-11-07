@@ -74,3 +74,28 @@ class Region(Anvil):
         nbt = self.parse_chunk_info(ci)
         return self.write_chunk(x, z, nbt, timestamp=ci.timestamp)
 
+    @classmethod
+    def withCache(cls):
+        cache = {}
+        class WithCache(cls):
+            def parse_chunk_info(self, chunk_info):
+                key = chunk_info.x, chunk_info.z
+                try:
+                    nbt, version = cache[key]
+
+                    if nbt._version == version:
+                        return nbt
+                except KeyError:
+                    pass
+
+                nbt = super().parse_chunk_info(chunk_info)
+                cache[key] = (nbt, nbt._version)
+
+                return nbt
+
+            def write_chunk(self, x, z, nbt, *, compression=ZLIB, timestamp=None):
+                cache[x,z] = (nbt, nbt._version)
+                return super().write_chunk(x,z,nbt,compression=compression, timestamp=timestamp)
+
+        
+        return WithCache 

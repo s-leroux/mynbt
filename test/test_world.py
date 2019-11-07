@@ -1,11 +1,14 @@
 import unittest
 import os.path
+import shutil
+
 from pprint import pprint
 
 import mynbt.world as world
 from mynbt.section import Section
 
 MC_SAMPLE_WORLD=os.path.join('test','data','MC-1_14_4-World')
+MC_COPY_WORLD=os.path.join('test','tmp','MC-1_14_4-World')
 
 class TestUtilities(unittest.TestCase):
     def test_1(self):
@@ -162,7 +165,21 @@ class TestWorld(unittest.TestCase):
               self.assertTrue(0 <= span.start <= span.stop <= 16, span)
 
 
-        self.world.apply(acc, range(-1, 33), range(0, 32), range(100, 122), **params)
+        with self.world.editor as editor:
+            editor.apply(acc, range(-1, 33), range(0, 32), range(100, 122), **params)
 
         self.assertEqual(len(l), 16)
 
+
+class TestWorldEditor(unittest.TestCase):
+    def setUp(self):
+        shutil.rmtree(MC_COPY_WORLD, ignore_errors=True)
+        shutil.copytree(MC_SAMPLE_WORLD, MC_COPY_WORLD)
+        self.world = world.World(MC_COPY_WORLD)
+
+    def test_1(self):
+        try:
+            with self.world.editor as editor:
+                editor.fill(range(-1,33), range(0,32), range(100, 122), Name="minecraft:dirt")
+        except:
+            import pdb; pdb.post_mortem()
