@@ -106,6 +106,37 @@ class Node:
         if parent is not None:
             self.register_parent(parent)
 
+    #------------------------------------
+    # Converion from native objects
+    #------------------------------------
+    @classmethod
+    def fromNativeObject(cls, value, *, parent=None):
+        """ The base implementation try to be smart and will
+            delegate to the right subclass
+        """
+        if isinstance(value, Node):
+            return value # XXX Shouldn't we clone here?
+
+        MAP = {
+          int: Integer,
+          float: Float,
+          array: Array,
+          dict: CompoundNode,
+          str: String,
+        }
+
+        cls = MAP.get(type(value))
+        if cls is None:
+            # fallback to linear search in case of
+            # derived classes
+            for t, cls in MAP.items():
+                if isinstance(value, t):
+                    break
+            else:
+                raise TypeError("Cannot identify the right node type for {} ({})".format(value, type(value)))
+
+        return cls.fromNativeObject(value, parent=parent)
+
     def clone(self, parent=None):
         """ Clone the receiver.
             Immutle values should return self
@@ -705,12 +736,12 @@ class ListNode(Composite, list, collections.abc.Hashable):
         list.__delitem__(self, idx)
 
 class CompoundNode(Composite, dict, collections.abc.Hashable):
-    def __init__(self, content={}, *, trait=None, payload=None, parent=None):
+    def __init__(self, *, trait=None, payload=None, parent=None):
         if trait is None:
             trait = CompoundTrait
 
         super().__init__(trait=trait, payload=payload, parent=parent)
-        dict.__init__(self, content)
+        dict.__init__(self)
 
     # override mutable methods
     for m in (): # XXX To be defined
@@ -729,7 +760,10 @@ class CompoundNode(Composite, dict, collections.abc.Hashable):
     #------------------------------------
     @classmethod
     def fromNativeObject(cls, dict_like_object, *, parent=None):
-        return CompoundNode(dict_like_object, parent=parent)
+        instance = cls(parent=parent)
+        instance.update({k:Node.fromNativeObject(v, parent=instance) for k,v in dict_like_object.items()})
+
+        return instance
 
 
     #------------------------------------
