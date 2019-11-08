@@ -55,7 +55,7 @@ class TestNodeComparisons(unittest.TestCase):
     def test_4(self):
         """ Proxies should be equal to themselves
         """
-        
+
         p = AtomProxy(trait=ByteTrait, payload=b"\xFF")
         self.assertEqual(p,p)
 
@@ -219,7 +219,7 @@ class TestListTag(unittest.TestCase):
           self.assertEqual(nbt[4], 4)
 
         del nbt[1]
-        
+
         self.assertIsNone(nbt._payload)
         self.assertEqual(len(nbt), 3)
         self.assertEqual(nbt[0], 0)
@@ -269,7 +269,7 @@ class TestCompoundTag(unittest.TestCase):
         self.assertEqual(nbt.Comp['shortTest'], 32767)
 
         del nbt.Comp.shortTest
-        
+
         self.assertIsNone(nbt._payload)
         self.assertEqual(len(nbt.Comp), 1)
         self.assertEqual(nbt.Comp['byteTest'], 127)
@@ -338,6 +338,42 @@ class TestConversionFromNativeObjects(unittest.TestCase):
         name = _.__name__ = "test_" + nodetype.__name__
         vars()[name] = _
 
+    for start, stop, typecode in (
+        (-10, 10, 'b'),
+        (-10, 100, 'b'),
+        (-10, 1000, 'i'),
+        (-10, 10000000, 'i'),
+        (-10, 1000000000, 'i'),
+        (-10, 100000000000, 'q'),
+        (-10, 10000000000000, 'q'),
+    ):
+        def _(self, start=start, stop=stop, typecode=typecode):
+
+            r = range(start, stop, (stop//10))
+            for f in (lambda x : x, list, tuple, lambda l : (x for x in l)):
+                node = Node.fromNativeObject(f(r))
+
+                self.assertIsInstance(node, Array)
+                self.assertEqual(node.typecode, typecode)
+                self.assertSequenceEqual(list(f(r)), node)
+
+        name = _.__name__ = "test_array_" + str(stop)
+        vars()[name] = _
+
+        def _(self, start=start, stop=stop, typecode=typecode):
+
+            value = list(range(start, stop, (stop//10)))
+            value.append('X')
+
+            node = Node.fromNativeObject(value)
+
+            self.assertIsInstance(node, ListNode)
+            self.assertSequenceEqual([str(n) for n in value], node)
+
+        name = _.__name__ = "test_mixed_list_" + str(stop)
+        vars()[name] = _
+
+
 
 class TestArray(unittest.TestCase):
     def _test_array(self, frame, mod):
@@ -346,7 +382,7 @@ class TestArray(unittest.TestCase):
         a, *_ = parse(frame)
         a = a.value() # Force data unpacking
         a._payload = None # clear cache
-      
+
         for i,j in zip(a, data):
             self.assertEqual(i&(mod-1),j) # unsigned comparaison
 
@@ -415,7 +451,7 @@ class TestExport(unittest.TestCase):
 
           x = t.export(compact=True)
           self.assertEqual(x, expected)
-    
+
     def _test_export_frame(self, frame, value):
           self._test_export(frame(value), value)
 
