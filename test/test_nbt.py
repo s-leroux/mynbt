@@ -284,6 +284,9 @@ class TestConversionFromNativeObjects(unittest.TestCase):
         self.assertIsInstance(node, CompoundNode)
         self.assertEqual(native, node)
 
+        self.assertIsInstance(node['A'], Integer)
+        self.assertIsInstance(node['B'], String)
+
     for typecode in ('b', 'i', 'q'):
         def _(self, typecode=typecode):
             native =  array(typecode, (i % 256 - 128 for i in range(1000)))
@@ -318,6 +321,21 @@ class TestConversionFromNativeObjects(unittest.TestCase):
             self.assertEqual(native, node)
 
         name = _.__name__ = "test_integer_" + typecode
+        vars()[name] = _
+
+    for literal, nodetype in (
+        (1, Integer),
+        (1.2, Float),
+        ("abc", String),
+        ({}, CompoundNode),
+    ):
+        def _(self, literal=literal, nodetype=nodetype):
+            node = Node.fromNativeObject(literal)
+
+            self.assertIsInstance(node, nodetype)
+            self.assertEqual(literal, node)
+
+        name = _.__name__ = "test_" + nodetype.__name__
         vars()[name] = _
 
 
