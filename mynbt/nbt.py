@@ -133,7 +133,24 @@ class Node:
                 if isinstance(value, t):
                     break
             else:
-                raise TypeError("Cannot identify the right node type for {} ({})".format(value, type(value)))
+                # If all else has failed, it may still be a sequence
+                try:
+                    value = tuple(value)
+                except:
+                    raise TypeError("Cannot identify the right node type for {} ({})".format(value, type(value)))
+
+                # sequences may either be Array or List
+                try:
+                    nbits = max(n.bit_length() for n in value)
+                except AttributeError:
+                    cls = ListNode
+                else:
+                    for n,t in ((8, 'b'), (32, 'i'), (64, 'q')):
+                        if nbits <= n:
+                            return Array.fromNativeObject(value, typecode=t, parent=parent)
+                    else:
+                        raise ValueError("Cannot represent {} bits values".format(nbits))
+
 
         return cls.fromNativeObject(value, parent=parent)
 
@@ -667,9 +684,9 @@ class Composite(Node):
 class ListNode(Composite, list, collections.abc.Hashable):
     KeyOrIndexError = IndexError
 
-    def __init__(self, *, trait, child_trait, payload, parent):
+    def __init__(self, *, trait=None, child_trait, payload=None, parent=None):
         self._child_trait = child_trait
-        super().__init__(trait=trait, payload=payload, parent=parent)
+        super().__init__(trait=trait or ListTrait, payload=payload, parent=parent)
         list.__init__(self)
 
     # override mutable methods
@@ -679,6 +696,53 @@ class ListNode(Composite, list, collections.abc.Hashable):
 
     def __str__(self):
         return str(self.export())
+
+    #------------------------------------
+    # Converion from native objects
+    #------------------------------------
+    @classmethod
+    def fromNativeObject(cls, sequence, *, parent=None, child_trait=None):
+        identity = lambda x : x
+
+        if not child_trait:
+            rules = [
+              (ByteTrait, lambda x : isinstance(x, int) and -(1<<7) <= x <= (1<<7)-1 , identity),
+              (IntTrait, lambda x : isinstance(x, int) and -(1<<31) <= x <= (1<<31)-1 , identity),
+              (LongTrait, lambda x : isinstance(x, int) and -(1<<63) <= x <= (1<<63)-1 , identity),
+              (FloatTrait, lambda x : isinstance(x, float), identity),
+              (StringTrait, lambda x : isinstance(x, str), identity),
+              (CompoundTrait, lambda x : isinstance(x, dict), identity),
+              (FloatTrait, lambda x : float(x) == x, float),
+              (StringTrait, lambda x : True, str),
+            ]
+            guess = { idx: [] for idx, rule in enumerate(rules) }
+
+            for item in sequence:
+                kill = []
+                for idx, l in guess.items():
+                    try:
+                        if rules[idx][1](item):
+                            l.append(rules[idx][2](item))
+                            continue
+                    except:
+                        pass
+                    kill.append(idx)
+
+                for k in kill:
+                    del guess[k]
+
+            for idx, (child_trait, *_) in enumerate(rules):
+                sequence = guess.get(idx)
+                if sequence is not None:
+                    break
+
+        if not child_trait:
+            raise TypeError("Can't guess the proper list type")
+
+        instance = cls(child_trait=child_trait,parent=parent)
+        instance.extend((child_trait.FACTORY(item) for item in sequence))
+
+        return instance
 
     #------------------------------------
     # Node interface
@@ -1031,11 +1095,13 @@ class ListTrait(Trait):
     ID = 9
     READER = ListReader
     VISIT = 'visitList'
+    FACTORY = ListNode.fromNativeObject
 
 class CompoundTrait(Trait):
     ID = 10
     READER = CompoundReader
     VISIT = 'visitCompound'
+    FACTORY = CompoundNode.fromNativeObject
 
 TYPE_TO_TRAIT = {
     int:    IntTrait,
