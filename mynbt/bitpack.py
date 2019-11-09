@@ -1,5 +1,7 @@
 from array import array
 
+PACK_FMT='H'
+
 """ Pack/unpack bit fields
 """
 def unpack(nbits, size, data, dest=None):
@@ -8,7 +10,7 @@ def unpack(nbits, size, data, dest=None):
         data is an iterator on fixed size ints
     """
     if dest is None:
-        dest = array('H')
+        dest = array(PACK_FMT)
 
     mask = (1<<nbits)-1
     umask = (1<<size)-1 # mask to avoid sign bit extension

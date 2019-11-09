@@ -459,10 +459,11 @@ class Array(array, Value):
         count = len(data)
         output.write(count.to_bytes(4, 'big'))
         # hack
-        view = memoryview(data)
+        typecode = {8:'q', 4:'i', 2:'h', 1:'b'}[size]
+        view = memoryview(data).cast('b').cast(typecode)
         SEGSIZE=min(1024, count) # actually SEGSIZE is the sive in items, not bytes
         buffer=bytearray(SEGSIZE*size)
-        fmt = ">" + {8:'q', 4:'i', 2:'h', 1:'b'}[size]*SEGSIZE
+        fmt = ">" + typecode*SEGSIZE
         while len(view) > SEGSIZE:
             head = view[:SEGSIZE]
             view = view[SEGSIZE:]
@@ -506,7 +507,7 @@ class Array(array, Value):
         self._items.insert(idx, value)
 
     #------------------------------------
-    # Hashable interface
+    # Bit Pack support
     #------------------------------------
     def toBitPack(self, nbits, parent = None):
         """ Unpack the data in the array to build a BitPack.
@@ -531,7 +532,7 @@ class BitPack(array, Value):
         of each item, or a nullary function returning that value.
     """
     def __new__(cls, *args, **kwargs):
-        return array.__new__(cls, 'H')
+        return array.__new__(cls, bitpack.PACK_FMT)
 
     def __init__(self, nbits, src,*, parent = None):
         """ Initialize a BitPack.
@@ -563,6 +564,15 @@ class BitPack(array, Value):
     # Proxy interface
     #------------------------------------
     def value(self):
+        return self
+
+    #------------------------------------
+    # Bit Pack support
+    #------------------------------------
+    def toBitPack(self, nbits, parent = None):
+        nbits_f = nbits if callable(nbits) else lambda: nbits
+        assert nbits_f() == self._nbits_f()
+
         return self
 
     #------------------------------------
@@ -635,6 +645,12 @@ class ArrayProxy(Proxy):
 
     def __iter__(self):
         return self.value().__iter__()
+
+    #------------------------------------
+    # Bit Pack support
+    #------------------------------------
+    def toBitPack(self, nbits, parent = None):
+        return self.value().toBitPack(nbits, parent=parent)
 
 class StringProxy(Proxy):
     def unpack(self):

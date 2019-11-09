@@ -1,4 +1,4 @@
-from mynbt.bitpack import unpack
+from mynbt.bitpack import unpack, PACK_FMT
 
 from pprint import pprint
 from array import array
@@ -56,7 +56,7 @@ class Section:
 
     @classmethod
     def new(cls, cx, cy, cz):
-        return cls(cx, cy, cz, [], array('H'))
+        return cls(cx, cy, cz, [], array(PACK_FMT))
 
     def block(self, x,y,z):
         """ Get block at (x,y,z) in section's coordinates
