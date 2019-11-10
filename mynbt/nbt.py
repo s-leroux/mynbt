@@ -399,18 +399,25 @@ class String(str, Value):
 # ====================================================================
 # Arrays
 # ====================================================================
-class Array(array, Value):
-    def __new__(cls, *, trait, **kwargs):
-        return array.__new__(cls, trait.FORMAT[-1]) # skip endianness
+class Array(Value):
+    """ An array of integral (byte, int, long) types.
 
+        Array are backed by python's `array.array` objects. They can be reshaped
+        without invalidating the node since the byte-level data remain inchanged.
+    """
     def __init__(self, *, trait, payload = None, parent = None):
         Value.__init__(self, trait = trait, payload = payload, parent = parent)
+        self._array = array(trait.FORMAT[-1]) # skip endianness
 
     @classmethod
     def fromValues(cls, values, *, trait, payload = None, parent = None):
         instance = cls(trait=trait, payload=payload, parent=parent)
-        array.extend(instance, (v for v, in values))
+        instance._array.extend(v for v, in values)
         return instance
+
+    @property
+    def typecode(self):
+        return self._array.typecode
 
     #------------------------------------
     # Converion from native objects
@@ -435,7 +442,7 @@ class Array(array, Value):
             raise ValueError("Typecode should be one of {}, not {}".format(tuple(TYPECODES.keys()), typecode[-1]))
 
         instance = cls(trait=trait, parent=parent)
-        array.extend(instance, sequence)
+        instance._array.extend(sequence)
 
         return instance
 
@@ -444,15 +451,15 @@ class Array(array, Value):
     #------------------------------------
     def clone(self, parent=None):
         instance = self.__class__(trait=self._trait, payload=self._payload, parent=parent)
-        instance.extend(self)
+        instance.extend(self._array)
 
         return instance
 
     def children(self):
-        return enumerate(Integer(v, trait=self._trait.TYPE, parent=self) for v in self)
+        return enumerate(Integer(v, trait=self._trait.TYPE, parent=self) for v in self._array)
 
     def write_payload(self, output):
-        self._write_payload(self._trait.SIZE, self, output)
+        self._write_payload(self._trait.SIZE, self._array, output)
 
     @staticmethod
     def _write_payload(size, data, output):
@@ -494,7 +501,7 @@ class Array(array, Value):
     def __setitem__(self, idx, value):
         idx = int(idx)
         self.invalidate()
-        array.__setitem__(self, idx, value)
+        self._array.__setitem__(idx, value)
 
     # def __delitem__(self, idx):
     #     self.invalidate()
@@ -504,7 +511,16 @@ class Array(array, Value):
 
     def insert(self, idx, value):
         self.invalidate()
-        self._items.insert(idx, value)
+        self._array.insert(idx, value)
+
+    #------------------------------------
+    # Sequence interface
+    #------------------------------------
+    def __iter__(self):
+        return self._array.__iter__()
+
+    def __len__(self):
+        return self._array.__len__()
 
     #------------------------------------
     # Bit Pack support
@@ -515,7 +531,7 @@ class Array(array, Value):
             `nbits` is either an integer holding the size in bits
             of each item, or a nullary function returning that value.
         """
-        return BitPack(nbits, self, parent=parent)
+        return BitPack(nbits, self._array, parent=parent)
 
 # ====================================================================
 # Bit packs

@@ -294,7 +294,7 @@ class TestConversionFromNativeObjects(unittest.TestCase):
             node = Array.fromNativeObject(native)
 
             self.assertIsInstance(node, Array)
-            self.assertSequenceEqual(native, node)
+            self.assertSequenceEqual(native, list(node))
 
         name = _.__name__ = "test_array_" + typecode
         vars()[name] = _
@@ -355,7 +355,7 @@ class TestConversionFromNativeObjects(unittest.TestCase):
 
                 self.assertIsInstance(node, Array)
                 self.assertEqual(node.typecode, typecode)
-                self.assertSequenceEqual(list(f(r)), node)
+                self.assertSequenceEqual(list(f(r)), list(node))
 
         name = _.__name__ = "test_array_" + str(stop)
         vars()[name] = _
