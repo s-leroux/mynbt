@@ -459,10 +459,11 @@ class Array(array, Value):
         count = len(data)
         output.write(count.to_bytes(4, 'big'))
         # hack
-        view = memoryview(data)
+        typecode = {8:'q', 4:'i', 2:'h', 1:'b'}[size]
+        view = memoryview(data).cast('b').cast(typecode)
         SEGSIZE=min(1024, count) # actually SEGSIZE is the sive in items, not bytes
         buffer=bytearray(SEGSIZE*size)
-        fmt = ">" + {8:'q', 4:'i', 2:'h', 1:'b'}[size]*SEGSIZE
+        fmt = ">" + typecode*SEGSIZE
         while len(view) > SEGSIZE:
             head = view[:SEGSIZE]
             view = view[SEGSIZE:]
@@ -506,7 +507,7 @@ class Array(array, Value):
         self._items.insert(idx, value)
 
     #------------------------------------
-    # Hashable interface
+    # Bit Pack support
     #------------------------------------
     def toBitPack(self, nbits, parent = None):
         """ Unpack the data in the array to build a BitPack.
@@ -531,7 +532,7 @@ class BitPack(array, Value):
         of each item, or a nullary function returning that value.
     """
     def __new__(cls, *args, **kwargs):
-        return array.__new__(cls, 'H')
+        return array.__new__(cls, bitpack.PACK_FMT)
 
     def __init__(self, nbits, src,*, parent = None):
         """ Initialize a BitPack.
@@ -563,6 +564,15 @@ class BitPack(array, Value):
     # Proxy interface
     #------------------------------------
     def value(self):
+        return self
+
+    #------------------------------------
+    # Bit Pack support
+    #------------------------------------
+    def toBitPack(self, nbits, parent = None):
+        nbits_f = nbits if callable(nbits) else lambda: nbits
+        assert nbits_f() == self._nbits_f()
+
         return self
 
     #------------------------------------
@@ -612,7 +622,7 @@ class Proxy(Node):
         """ Return a value object corresponding to the payload
         """
         if self._value is None:
-            self._value = self._trait.FACTORY(self.unpack(), trait=self._trait, payload=self._payload)
+            self._value = self._trait.instanceFromValue(self.unpack(), payload=self._payload)
 
         return self._value
 
@@ -635,6 +645,12 @@ class ArrayProxy(Proxy):
 
     def __iter__(self):
         return self.value().__iter__()
+
+    #------------------------------------
+    # Bit Pack support
+    #------------------------------------
+    def toBitPack(self, nbits, parent = None):
+        return self.value().toBitPack(nbits, parent=parent)
 
 class StringProxy(Proxy):
     def unpack(self):
@@ -689,11 +705,6 @@ class ListNode(Composite, list, collections.abc.Hashable):
         super().__init__(trait=trait or ListTrait, payload=payload, parent=parent)
         list.__init__(self)
 
-    # override mutable methods
-    for m in ('insert', 'append', 'extend'): # XXX Possibly other!
-        vars()[m] = Composite.withInvalidate(getattr(list, m))
-
-
     def __str__(self):
         return str(self.export())
 
@@ -740,7 +751,7 @@ class ListNode(Composite, list, collections.abc.Hashable):
             raise TypeError("Can't guess the proper list type")
 
         instance = cls(child_trait=child_trait,parent=parent)
-        instance.extend((child_trait.FACTORY(item) for item in sequence))
+        instance.extend((child_trait.instanceFromValue(item, parent=instance) for item in sequence))
 
         return instance
 
@@ -786,7 +797,7 @@ class ListNode(Composite, list, collections.abc.Hashable):
     def __setitem__(self, idx, value):
         idx = int(idx)
         if not isinstance(value, Node):
-            value = self._child_trait.FACTORY(value, trait=self._child_trait)
+            value = self._child_trait.instanceFromValue(value)
 
         self.invalidate()
         value.register_parent(self)
@@ -798,6 +809,27 @@ class ListNode(Composite, list, collections.abc.Hashable):
         # using a WeakKeyDictionary we may emulate multibag and remove self
         # from the removed item parent list
         list.__delitem__(self, idx)
+
+    def insert(self, i, value):
+        if not isinstance(value, Node):
+            value = self._child_trait.instanceFromValue(value)
+        value.register_parent(self)
+        self.invalidate()
+
+        super().insert(i, value)
+
+    def append(self, value):
+        if not isinstance(value, Node):
+            value = self._child_trait.instanceFromValue(value)
+        value.register_parent(self)
+        self.invalidate()
+
+        super().append(value)
+
+    def extend(self, iterable):
+        self.invalidate()
+        super().extend(self._child_trait.instanceFromValue(value, parent=self) if not isinstance(value, Node) else value for value in iterable)
+
 
 class CompoundNode(Composite, dict, collections.abc.Hashable):
     def __init__(self, *, trait=None, payload=None, parent=None):
@@ -823,8 +855,8 @@ class CompoundNode(Composite, dict, collections.abc.Hashable):
     # Converion from native objects
     #------------------------------------
     @classmethod
-    def fromNativeObject(cls, dict_like_object, *, parent=None):
-        instance = cls(parent=parent)
+    def fromNativeObject(cls, dict_like_object, *, trait = None, parent=None):
+        instance = cls(parent=parent, trait = trait or cls)
         instance.update({k:Node.fromNativeObject(v, parent=instance) for k,v in dict_like_object.items()})
 
         return instance
@@ -873,11 +905,15 @@ class CompoundNode(Composite, dict, collections.abc.Hashable):
             # if the new value replace an existing one, the value keep the same type
             # otherwise a compatible type is inferred
             old = self.get(idx)
-            trait = old._trait if old is not None else TYPE_TO_TRAIT[type(value)]
-            value = trait.FACTORY(value, trait=trait)
+            if old:
+                value = old._trait.instanceFromValue(value)
+            else:
+                value = Node.fromNativeObject(value)
 
         value.register_parent(self)
         dict.__setitem__(self, idx, value)
+
+        return value
 
     def __delitem__(self, idx):
         self.invalidate()
@@ -1004,6 +1040,13 @@ class Trait(metaclass=TraitMetaclass):
         """ Call the most specialized visitor method for this node
         """
         return visitor.__getattribute__(cls.VISIT)();
+
+    @classmethod
+    def instanceFromValue(cls, *args, **kwargs):
+        try:
+            return cls.FACTORY(*args, trait=cls, **kwargs)
+        except:
+            import pdb; pdb.set_trace()
 
 class NoTrait(Trait):
     pass

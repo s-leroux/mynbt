@@ -1,7 +1,7 @@
 import unittest
 
 from mynbt.section import *
-
+import mynbt.nbt as nbt
 from test.data.simplechunk import SECTION
 
 class TestUtils(unittest.TestCase):
@@ -23,7 +23,7 @@ class TestUtils(unittest.TestCase):
 
 class TestSection(unittest.TestCase):
     def setUp(self):
-        self.section = Section.fromNBT(0,0,SECTION)
+        self.section = Section.fromNBT(0,0,nbt.Node.fromNativeObject(SECTION))
 
     def test_1(self):
         """ Section can load data from NBT
