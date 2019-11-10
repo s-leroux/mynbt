@@ -47,10 +47,21 @@ class Section:
 
     @classmethod
     def fromNBT(cls, cx, cz, section):
-        palette = section.get('Palette', {})
-        blockstates = section.get('BlockStates', [])
+        palette = section.get('Palette')
+        if not palette:
+            section['Palette'] = dict(Name="minecraft:air")
+            palette = section['Palette']
 
-        blocks = unpack(max(4,(len(palette)-1).bit_length()), 64, blockstates)
+        nbits = lambda : max(4,(len(palette)-1).bit_length())
+
+        blockstate = section.get('BlockStates')
+        if not blockstate:
+            section['BlockState'] = array('q', (0 for x in range(4096*nbits()//64)))
+            blockstate = section['BlockState']
+
+        blocks = blockstate.toBitPack(nbits)
+        if blocks is not blockstate:
+            section['BlockState'] = blocks
 
         return cls(cx, section['Y'], cz, palette, blocks)
 
