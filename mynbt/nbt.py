@@ -1096,28 +1096,28 @@ class EndTrait(Trait):
 class ByteTrait(AtomTrait):
     ID = 1
     SIZE = 1
-    FORMAT = ">b"
+    FORMAT = ">" + bitpack.INT_8
     FACTORY = Integer
     VISIT = 'visitByte'
 
 class ShortTrait(AtomTrait):
     ID = 2
     SIZE = 2
-    FORMAT = ">h"
+    FORMAT = ">" + bitpack.INT_16
     FACTORY = Integer
     VISIT = 'visitShort'
 
 class IntTrait(AtomTrait):
     ID = 3
     SIZE = 4
-    FORMAT = ">i"
+    FORMAT = ">" + bitpack.INT_32
     FACTORY = Integer
     VISIT = 'visitInt'
 
 class LongTrait(AtomTrait):
     ID = 4
     SIZE = 8
-    FORMAT = ">q"
+    FORMAT = ">" + bitpack.INT_64
     FACTORY = Integer
     VISIT = 'visitLong'
 
@@ -1138,21 +1138,21 @@ class DoubleTrait(AtomTrait):
 class ByteArrayTrait(ArrayTrait):
     ID = 7
     SIZE = 1
-    FORMAT = ">b"
+    FORMAT = ">" + bitpack.INT_8
     TYPE = ByteTrait
     VISIT = 'visitByteArray'
 
 class IntArrayTrait(ArrayTrait):
     ID = 11
     SIZE = 4
-    FORMAT = ">i"
+    FORMAT = ">" + bitpack.INT_32
     TYPE = IntTrait
     VISIT = 'visitIntArray'
 
 class LongArrayTrait(ArrayTrait):
     ID = 12
     SIZE = 8
-    FORMAT = ">q"
+    FORMAT = ">" + bitpack.INT_64
     TYPE = LongTrait
     VISIT = 'visitLongArray'
 

@@ -7,6 +7,9 @@ from array import array
 # Constants
 # ====================================================================
 UINT_SIZE={}
+""" Mapping between length in bytes and format letters
+    for unsigned integers
+"""
 for fmt in "BHILQ":
     UINT_SIZE[array(fmt).itemsize] = fmt
 
@@ -16,6 +19,21 @@ UINT_32 = UINT_SIZE[4]
 UINT_64 = UINT_SIZE[8]
 
 UINT_FORMAT = 'X' + UINT_8*8 + UINT_16 *8 + UINT_32*16 + UINT_64*32
+
+
+INT_SIZE={}
+""" Mapping between length in bytes and format letters
+    for signed integers
+"""
+for fmt in "bhilq":
+    INT_SIZE[array(fmt).itemsize] = fmt
+
+INT_8 = INT_SIZE[1]
+INT_16 = INT_SIZE[2]
+INT_32 = INT_SIZE[4]
+INT_64 = INT_SIZE[8]
+
+INT_FORMAT = 'X' + INT_8*8 + INT_16 *8 + INT_32*16 + INT_64*32
 
 # ====================================================================
 # Global functions
