@@ -518,9 +518,11 @@ class Array(Value):
         return id(self)
 
     def __setitem__(self, idx, value):
-        idx = int(idx)
         self.invalidate()
         self._array.__setitem__(idx, value)
+
+    def __getitem__(self, idx):
+        return self._array.__getitem__(idx)
 
     # def __delitem__(self, idx):
     #     self.invalidate()
@@ -540,81 +542,6 @@ class Array(Value):
 
     def __len__(self):
         return self._array.__len__()
-
-    #------------------------------------
-    # Bit Pack support
-    #------------------------------------
-    def toBitPack(self, nbits, parent = None):
-        """ Unpack the data in the array to build a BitPack.
-
-            `nbits` is either an integer holding the size in bits
-            of each item, or a nullary function returning that value.
-        """
-        return BitPack(nbits, self._array, parent=parent)
-
-# ====================================================================
-# Bit packs
-# ====================================================================
-class BitPack(array, Value):
-    """ BitPacks are special kind of arrays where fixed bit-length
-        values are packed into 64 bits integers
-
-        The NBT parser never automaticcally build a bit pack. It
-        must be explicitly instancited from a sequence. As an helper,
-        the Array class provides the `toBitPack` method.
-
-        `nbits` is either an integer holding the size in bits
-        of each item, or a nullary function returning that value.
-    """
-    def __new__(cls, *args, **kwargs):
-        return array.__new__(cls, bitpack.UINT_16)
-
-    def __init__(self, nbits, src,*, parent = None):
-        """ Initialize a BitPack.
-
-            `src` is  assumed to be an `array.array` object
-        """
-        nbits_f = nbits if callable(nbits) else lambda: nbits
-
-        Value.__init__(self, trait = LongArrayTrait, payload = None, parent = parent)
-        bitpack.unpack(nbits_f(), src.itemsize*8, src, self)
-        self._nbits_f = nbits_f
-
-    #------------------------------------
-    # Node interface
-    #------------------------------------
-    def clone(self, parent=None):
-        instance = self.__class__(self._nbits_f(), self, parent=parent)
-
-        return instance
-
-    def children(self):
-        return () # It is not obvious if BitPack should be enumerable
-
-    def write_payload(self, output):
-        data = bitpack.pack(64, self._nbits_f(), self)
-        Array._write_payload(8, data, output)
-
-    #------------------------------------
-    # Proxy interface
-    #------------------------------------
-    def value(self):
-        return self
-
-    #------------------------------------
-    # Bit Pack support
-    #------------------------------------
-    def toBitPack(self, nbits, parent = None):
-        nbits_f = nbits if callable(nbits) else lambda: nbits
-        assert nbits_f() == self._nbits_f()
-
-        return self
-
-    #------------------------------------
-    # Hashable interface
-    #------------------------------------
-    def __hash__(self):
-        return id(self)
 
 # ====================================================================
 # Proxy
@@ -681,12 +608,6 @@ class ArrayProxy(Proxy):
     def __iter__(self):
         return self.value().__iter__()
 
-    #------------------------------------
-    # Bit Pack support
-    #------------------------------------
-    def toBitPack(self, nbits, parent = None):
-        return self.value().toBitPack(nbits, parent=parent)
-
 class StringProxy(Proxy):
     def unpack(self):
         return bytes(self._payload[2:]).decode("utf8") # XXX unneeded (?) copy
@@ -713,7 +634,7 @@ class Composite(Node):
     def __getitem__(self, idx):
         sentinelle = object()
 
-        node = self.get(idx, sentinelle)
+        node = self._get(idx, sentinelle)
         if node is sentinelle:
             raise self.KeyOrIndexError(idx)
 
@@ -823,7 +744,7 @@ class ListNode(Composite, list, collections.abc.Hashable):
     #------------------------------------
     # Mutable sequence interface
     #------------------------------------
-    def get(self, idx, default=None):
+    def _get(self, idx, default=None):
         try:
             return list.__getitem__(self, int(idx))
         except:
@@ -929,8 +850,14 @@ class CompoundNode(Composite, dict, collections.abc.Hashable):
     #------------------------------------
     # Mutable mapping interface
     #------------------------------------
-    def get(self, idx, default=None):
+    def _get(self, idx, default=None):
         return dict.get(self, str(idx), default)
+
+    def get(self, idx, default=None):
+        try:
+            return self.__getitem__(str(idx))
+        except KeyError:
+            return default
 
     def __setitem__(self, idx, value):
         idx = str(idx)

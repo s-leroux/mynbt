@@ -59,11 +59,8 @@ class Section:
             section['BlockState'] = array('q', (0 for x in range(4096*nbits()//64)))
             blockstate = section['BlockState']
 
-        blocks = blockstate.toBitPack(nbits)
-        if blocks is not blockstate:
-            section['BlockState'] = blocks
-
-        return cls(cx, section['Y'], cz, palette, blocks)
+        blockstate.reshape(nbits)
+        return cls(cx, section['Y'], cz, palette, blockstate)
 
     @classmethod
     def new(cls, cx, cy, cz):

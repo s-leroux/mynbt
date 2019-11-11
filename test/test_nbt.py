@@ -461,23 +461,23 @@ class TestBitPack(unittest.TestCase):
         arr, *_ = parse(frame)
         arr = arr.value()
 
-        bp = arr.toBitPack(4)
+        arr.reshape(4)
 
-        for word in bp[0::16]:
+        for word in arr[0::16]:
             self.assertEqual(word, 0x07)
-        for word in bp[1::16]:
+        for word in arr[1::16]:
             self.assertEqual(word, 0x08)
-        for word in bp[2::16]:
+        for word in arr[2::16]:
             self.assertEqual(word, 0x09)
-        for word in bp[3::16]:
+        for word in arr[3::16]:
             self.assertEqual(word, 0x0A)
-        for word in bp[4::16]:
+        for word in arr[4::16]:
             self.assertEqual(word, 0x00)
-        for word in bp[5::16]:
+        for word in arr[5::16]:
             self.assertEqual(word, 0x0F)
-        for word in bp[6::16]:
+        for word in arr[6::16]:
             self.assertEqual(word, 0x0F)
-        for word in bp[7::16]:
+        for word in arr[7::16]:
             self.assertEqual(word, 0x0F)
 
     def test_2(self):
@@ -485,10 +485,10 @@ class TestBitPack(unittest.TestCase):
         arr, *_ = parse(frame)
         arr = arr.value()
 
-        bp = arr.toBitPack(4)
+        arr.reshape(4)
 
         output = io.BytesIO()
-        bp.write_to(output)
+        arr.write_to(output)
         result = bytes(output.getbuffer())
 
         self.assertEqual(frame, result)
