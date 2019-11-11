@@ -399,18 +399,37 @@ class String(str, Value):
 # ====================================================================
 # Arrays
 # ====================================================================
-class Array(array, Value):
-    def __new__(cls, *, trait, **kwargs):
-        return array.__new__(cls, trait.FORMAT[-1]) # skip endianness
+class Array(Value):
+    """ An array of integral (byte, int, long) types.
 
+        Array are backed by python's `array.array` objects. They can be reshaped
+        without invalidating the node since the byte-level data remain inchanged.
+    """
     def __init__(self, *, trait, payload = None, parent = None):
         Value.__init__(self, trait = trait, payload = payload, parent = parent)
+        self._array = array(trait.FORMAT[-1]) # skip endianness
+
+        nbits = self._array.itemsize*8
+        self._nbits_f = nbits if callable(nbits) else lambda: nbits
+
 
     @classmethod
     def fromValues(cls, values, *, trait, payload = None, parent = None):
         instance = cls(trait=trait, payload=payload, parent=parent)
-        array.extend(instance, (v for v, in values))
+        instance._array.extend(values)
         return instance
+
+    @property
+    def typecode(self):
+        return self._array.typecode
+
+    def reshape(self, dst_nbits):
+        """ Reshape the array so each sequence of nbits becomes an items
+        """
+        dst_nbits_f = dst_nbits if callable(dst_nbits) else lambda: dst_nbits
+        self._array = bitpack.unpack(dst_nbits_f(), self._nbits_f(), self._array)
+        self._nbits_f = dst_nbits_f
+
 
     #------------------------------------
     # Converion from native objects
@@ -435,7 +454,7 @@ class Array(array, Value):
             raise ValueError("Typecode should be one of {}, not {}".format(tuple(TYPECODES.keys()), typecode[-1]))
 
         instance = cls(trait=trait, parent=parent)
-        array.extend(instance, sequence)
+        instance._array.extend(sequence)
 
         return instance
 
@@ -444,23 +463,30 @@ class Array(array, Value):
     #------------------------------------
     def clone(self, parent=None):
         instance = self.__class__(trait=self._trait, payload=self._payload, parent=parent)
-        instance.extend(self)
+        instance.extend(self._array)
 
         return instance
 
     def children(self):
-        return enumerate(Integer(v, trait=self._trait.TYPE, parent=self) for v in self)
+        return enumerate(Integer(v, trait=self._trait.TYPE, parent=self) for v in self._array)
 
     def write_payload(self, output):
-        self._write_payload(self._trait.SIZE, self, output)
+        data = self._array
+        nbits = self._nbits_f()
+        expected_nbits = 8*self._trait.SIZE
+
+        if nbits != expected_nbits:
+            data = bitpack.unpack(expected_nbits, nbits, data)
+
+        self._write_payload(self._trait.SIZE, data, output)
 
     @staticmethod
     def _write_payload(size, data, output):
         count = len(data)
         output.write(count.to_bytes(4, 'big'))
         # hack
-        typecode = {8:'q', 4:'i', 2:'h', 1:'b'}[size]
-        view = memoryview(data).cast('b').cast(typecode)
+        typecode = bitpack.UINT_SIZE[size]
+        view = memoryview(data).cast(bitpack.UINT_8).cast(typecode)
         SEGSIZE=min(1024, count) # actually SEGSIZE is the sive in items, not bytes
         buffer=bytearray(SEGSIZE*size)
         fmt = ">" + typecode*SEGSIZE
@@ -492,9 +518,11 @@ class Array(array, Value):
         return id(self)
 
     def __setitem__(self, idx, value):
-        idx = int(idx)
         self.invalidate()
-        array.__setitem__(self, idx, value)
+        self._array.__setitem__(idx, value)
+
+    def __getitem__(self, idx):
+        return self._array.__getitem__(idx)
 
     # def __delitem__(self, idx):
     #     self.invalidate()
@@ -504,82 +532,16 @@ class Array(array, Value):
 
     def insert(self, idx, value):
         self.invalidate()
-        self._items.insert(idx, value)
+        self._array.insert(idx, value)
 
     #------------------------------------
-    # Bit Pack support
+    # Sequence interface
     #------------------------------------
-    def toBitPack(self, nbits, parent = None):
-        """ Unpack the data in the array to build a BitPack.
+    def __iter__(self):
+        return self._array.__iter__()
 
-            `nbits` is either an integer holding the size in bits
-            of each item, or a nullary function returning that value.
-        """
-        return BitPack(nbits, self, parent=parent)
-
-# ====================================================================
-# Bit packs
-# ====================================================================
-class BitPack(array, Value):
-    """ BitPacks are special kind of arrays where fixed bit-length
-        values are packed into 64 bits integers
-
-        The NBT parser never automaticcally build a bit pack. It
-        must be explicitly instancited from a sequence. As an helper,
-        the Array class provides the `toBitPack` method.
-
-        `nbits` is either an integer holding the size in bits
-        of each item, or a nullary function returning that value.
-    """
-    def __new__(cls, *args, **kwargs):
-        return array.__new__(cls, bitpack.PACK_FMT)
-
-    def __init__(self, nbits, src,*, parent = None):
-        """ Initialize a BitPack.
-
-            `src` is  assumed to be an `array.array` object
-        """
-        nbits_f = nbits if callable(nbits) else lambda: nbits
-
-        Value.__init__(self, trait = LongArrayTrait, payload = None, parent = parent)
-        bitpack.unpack(nbits_f(), src.itemsize*8, src, self)
-        self._nbits_f = nbits_f
-
-    #------------------------------------
-    # Node interface
-    #------------------------------------
-    def clone(self, parent=None):
-        instance = self.__class__(self._nbits_f(), self, parent=parent)
-
-        return instance
-
-    def children(self):
-        return () # It is not obvious if BitPack should be enumerable
-
-    def write_payload(self, output):
-        data = bitpack.pack(64, self._nbits_f(), self)
-        Array._write_payload(8, data, output)
-
-    #------------------------------------
-    # Proxy interface
-    #------------------------------------
-    def value(self):
-        return self
-
-    #------------------------------------
-    # Bit Pack support
-    #------------------------------------
-    def toBitPack(self, nbits, parent = None):
-        nbits_f = nbits if callable(nbits) else lambda: nbits
-        assert nbits_f() == self._nbits_f()
-
-        return self
-
-    #------------------------------------
-    # Hashable interface
-    #------------------------------------
-    def __hash__(self):
-        return id(self)
+    def __len__(self):
+        return self._array.__len__()
 
 # ====================================================================
 # Proxy
@@ -635,7 +597,7 @@ class AtomProxy(Proxy):
 
 class ArrayProxy(Proxy):
     def unpack(self):
-        return struct.iter_unpack(self._trait.FORMAT, self._payload[4:])
+        return (v for v, in struct.iter_unpack(self._trait.FORMAT, self._payload[4:]))
 
     #------------------------------------
     # Node interface
@@ -645,12 +607,6 @@ class ArrayProxy(Proxy):
 
     def __iter__(self):
         return self.value().__iter__()
-
-    #------------------------------------
-    # Bit Pack support
-    #------------------------------------
-    def toBitPack(self, nbits, parent = None):
-        return self.value().toBitPack(nbits, parent=parent)
 
 class StringProxy(Proxy):
     def unpack(self):
@@ -678,7 +634,7 @@ class Composite(Node):
     def __getitem__(self, idx):
         sentinelle = object()
 
-        node = self.get(idx, sentinelle)
+        node = self._get(idx, sentinelle)
         if node is sentinelle:
             raise self.KeyOrIndexError(idx)
 
@@ -788,7 +744,7 @@ class ListNode(Composite, list, collections.abc.Hashable):
     #------------------------------------
     # Mutable sequence interface
     #------------------------------------
-    def get(self, idx, default=None):
+    def _get(self, idx, default=None):
         try:
             return list.__getitem__(self, int(idx))
         except:
@@ -894,8 +850,14 @@ class CompoundNode(Composite, dict, collections.abc.Hashable):
     #------------------------------------
     # Mutable mapping interface
     #------------------------------------
-    def get(self, idx, default=None):
+    def _get(self, idx, default=None):
         return dict.get(self, str(idx), default)
+
+    def get(self, idx, default=None):
+        try:
+            return self.__getitem__(str(idx))
+        except KeyError:
+            return default
 
     def __setitem__(self, idx, value):
         idx = str(idx)
@@ -1068,28 +1030,28 @@ class EndTrait(Trait):
 class ByteTrait(AtomTrait):
     ID = 1
     SIZE = 1
-    FORMAT = ">b"
+    FORMAT = ">" + bitpack.INT_8
     FACTORY = Integer
     VISIT = 'visitByte'
 
 class ShortTrait(AtomTrait):
     ID = 2
     SIZE = 2
-    FORMAT = ">h"
+    FORMAT = ">" + bitpack.INT_16
     FACTORY = Integer
     VISIT = 'visitShort'
 
 class IntTrait(AtomTrait):
     ID = 3
     SIZE = 4
-    FORMAT = ">i"
+    FORMAT = ">" + bitpack.INT_32
     FACTORY = Integer
     VISIT = 'visitInt'
 
 class LongTrait(AtomTrait):
     ID = 4
     SIZE = 8
-    FORMAT = ">q"
+    FORMAT = ">" + bitpack.INT_64
     FACTORY = Integer
     VISIT = 'visitLong'
 
@@ -1110,21 +1072,21 @@ class DoubleTrait(AtomTrait):
 class ByteArrayTrait(ArrayTrait):
     ID = 7
     SIZE = 1
-    FORMAT = ">b"
+    FORMAT = ">" + bitpack.INT_8
     TYPE = ByteTrait
     VISIT = 'visitByteArray'
 
 class IntArrayTrait(ArrayTrait):
     ID = 11
     SIZE = 4
-    FORMAT = ">i"
+    FORMAT = ">" + bitpack.INT_32
     TYPE = IntTrait
     VISIT = 'visitIntArray'
 
 class LongArrayTrait(ArrayTrait):
     ID = 12
     SIZE = 8
-    FORMAT = ">q"
+    FORMAT = ">" + bitpack.INT_64
     TYPE = LongTrait
     VISIT = 'visitLongArray'
 

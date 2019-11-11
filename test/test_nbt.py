@@ -294,7 +294,7 @@ class TestConversionFromNativeObjects(unittest.TestCase):
             node = Array.fromNativeObject(native)
 
             self.assertIsInstance(node, Array)
-            self.assertSequenceEqual(native, node)
+            self.assertSequenceEqual(native, list(node))
 
         name = _.__name__ = "test_array_" + typecode
         vars()[name] = _
@@ -355,7 +355,7 @@ class TestConversionFromNativeObjects(unittest.TestCase):
 
                 self.assertIsInstance(node, Array)
                 self.assertEqual(node.typecode, typecode)
-                self.assertSequenceEqual(list(f(r)), node)
+                self.assertSequenceEqual(list(f(r)), list(node))
 
         name = _.__name__ = "test_array_" + str(stop)
         vars()[name] = _
@@ -399,29 +399,85 @@ class TestArray(unittest.TestCase):
     def test_long_array(self):
         self._test_array(LONG_ARRAY_FRAME, 1<<64)
 
+    def _test_reshape(self, dst_nbits, trait):
+        node = Array(trait=trait)
+        node._array.frombytes(bytes(x%256 for x in range(64*dst_nbits)))
+
+        mask = (1<<trait.SIZE*8)-1
+
+        start = [x & mask for x in node._array]
+        node.reshape(dst_nbits)
+        node.reshape(trait.SIZE*8)
+        end = [x & mask for x in node._array]
+
+        self.assertSequenceEqual(start, end)
+
+    for b in (4, 5, 6, 7, 8, 10, 12, 14, 16, 32, 48, 64):
+        for t in (ByteArrayTrait, IntArrayTrait, LongArrayTrait):
+            def _(self, b=b, t=t):
+                self._test_reshape(b, t)
+
+            name = "test_reshape_{}_{}".format(t.__name__, b)
+            _.__name__ = name
+            vars()[name] = _
+
+    def test_reshape_should_not_invalidate_cache(self):
+        """ Array.reshape should not invalidate cache
+        """
+        a, *_ = parse(LONG_ARRAY_FRAME(range(20)))
+        a = a.value()
+
+        self.assertIsNotNone(a._payload)
+        a.reshape(8)
+        self.assertIsNotNone(a._payload)
+
+    def test_reshaped_array_should_save_as_initial_format(self):
+        """ Reshaped arrays should save as initial format
+        """
+        frame = INT_ARRAY_FRAME(range(20), name="Name")
+        # INT are 4 bytes long, we have 20 items
+        modified = bytearray(frame)
+        modified[-4*20+0] = 0x78
+        modified[-4*20+1] = 0x56
+        modified[-4*20+2] = 0x34
+        modified[-4*20+3] = 0x12
+
+        a, *_ = parse(frame)
+        a = a.value()
+
+        a.reshape(8)
+        a[0]=0x12
+        a[1]=0x34
+        a[2]=0x56
+        a[3]=0x78
+
+        dump = a.dump(name="Name")
+
+        self.assertEqual(bytes(dump), bytes(modified))
+
 class TestBitPack(unittest.TestCase):
     def test_1(self):
         frame = LONG_ARRAY_FRAME([0x12345678FFF0A987]*100, name="")
         arr, *_ = parse(frame)
         arr = arr.value()
 
-        bp = arr.toBitPack(4)
+        arr.reshape(4)
 
-        for word in bp[0::16]:
+        for word in arr[0::16]:
             self.assertEqual(word, 0x07)
-        for word in bp[1::16]:
+        for word in arr[1::16]:
             self.assertEqual(word, 0x08)
-        for word in bp[2::16]:
+        for word in arr[2::16]:
             self.assertEqual(word, 0x09)
-        for word in bp[3::16]:
+        for word in arr[3::16]:
             self.assertEqual(word, 0x0A)
-        for word in bp[4::16]:
+        for word in arr[4::16]:
             self.assertEqual(word, 0x00)
-        for word in bp[5::16]:
+        for word in arr[5::16]:
             self.assertEqual(word, 0x0F)
-        for word in bp[6::16]:
+        for word in arr[6::16]:
             self.assertEqual(word, 0x0F)
-        for word in bp[7::16]:
+        for word in arr[7::16]:
             self.assertEqual(word, 0x0F)
 
     def test_2(self):
@@ -429,10 +485,10 @@ class TestBitPack(unittest.TestCase):
         arr, *_ = parse(frame)
         arr = arr.value()
 
-        bp = arr.toBitPack(4)
+        arr.reshape(4)
 
         output = io.BytesIO()
-        bp.write_to(output)
+        arr.write_to(output)
         result = bytes(output.getbuffer())
 
         self.assertEqual(frame, result)

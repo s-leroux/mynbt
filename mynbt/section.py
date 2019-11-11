@@ -1,4 +1,4 @@
-from mynbt.bitpack import unpack, PACK_FMT
+from mynbt.bitpack import unpack, UINT_16
 
 from pprint import pprint
 from array import array
@@ -59,15 +59,12 @@ class Section:
             section['BlockState'] = array('q', (0 for x in range(4096*nbits()//64)))
             blockstate = section['BlockState']
 
-        blocks = blockstate.toBitPack(nbits)
-        if blocks is not blockstate:
-            section['BlockState'] = blocks
-
-        return cls(cx, section['Y'], cz, palette, blocks)
+        blockstate.reshape(nbits)
+        return cls(cx, section['Y'], cz, palette, blockstate)
 
     @classmethod
     def new(cls, cx, cy, cz):
-        return cls(cx, cy, cz, [], array(PACK_FMT))
+        return cls(cx, cy, cz, [], array(UINT_16))
 
     def block(self, x,y,z):
         """ Get block at (x,y,z) in section's coordinates

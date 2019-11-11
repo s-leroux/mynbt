@@ -1,16 +1,55 @@
 from array import array
 
-PACK_FMT='H'
-
-""" Pack/unpack bit fields
+""" Bit fields manipulation
 """
+
+# ====================================================================
+# Constants
+# ====================================================================
+UINT_SIZE={}
+""" Mapping between length in bytes and format letters
+    for unsigned integers
+"""
+for fmt in "BHILQ":
+    UINT_SIZE[array(fmt).itemsize] = fmt
+
+UINT_8 = UINT_SIZE[1]
+UINT_16 = UINT_SIZE[2]
+UINT_32 = UINT_SIZE[4]
+UINT_64 = UINT_SIZE[8]
+
+UINT_FORMAT = 'X' + UINT_8*8 + UINT_16 *8 + UINT_32*16 + UINT_64*32
+
+
+INT_SIZE={}
+""" Mapping between length in bytes and format letters
+    for signed integers
+"""
+for fmt in "bhilq":
+    INT_SIZE[array(fmt).itemsize] = fmt
+
+INT_8 = INT_SIZE[1]
+INT_16 = INT_SIZE[2]
+INT_32 = INT_SIZE[4]
+INT_64 = INT_SIZE[8]
+
+INT_FORMAT = 'X' + INT_8*8 + INT_16 *8 + INT_32*16 + INT_64*32
+
+# ====================================================================
+# Global functions
+# ====================================================================
 def unpack(nbits, size, data, dest=None):
     """ split data in nbits chunks
 
         data is an iterator on fixed size ints
     """
     if dest is None:
-        dest = array(PACK_FMT)
+        try:
+            fmt = UINT_FORMAT[nbits]
+        except IndexError:
+            raise OverflowError("Cannot pack/unpack {} bits wide data".format(nbits))
+
+        dest = array(fmt)
 
     mask = (1<<nbits)-1
     umask = (1<<size)-1 # mask to avoid sign bit extension
@@ -29,13 +68,14 @@ def unpack(nbits, size, data, dest=None):
 
     return dest
 
-_format = 'X' + 'B'*8 + 'H'*8 + 'L'*16 + 'Q'*32
-assert len(_format) == 1+64
-
 def pack(nbits, size, data):
     """ join data in chunks of nbits
     """
-    dest = array(_format[nbits])
+    try:
+        dest = array(UINT_FORMAT[nbits])
+    except IndexError:
+        raise OverflowError("Cannot pack/unpack {} bits wide data".format(nbits))
+
     busy = 0
     acc = 0
     mask = (1<<nbits)-1
