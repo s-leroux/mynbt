@@ -478,8 +478,8 @@ class Array(Value):
         count = len(data)
         output.write(count.to_bytes(4, 'big'))
         # hack
-        typecode = {8:'q', 4:'i', 2:'h', 1:'b'}[size]
-        view = memoryview(data).cast('b').cast(typecode)
+        typecode = bitpack.UINT_SIZE[size]
+        view = memoryview(data).cast(bitpack.UINT_8).cast(typecode)
         SEGSIZE=min(1024, count) # actually SEGSIZE is the sive in items, not bytes
         buffer=bytearray(SEGSIZE*size)
         fmt = ">" + typecode*SEGSIZE
@@ -560,7 +560,7 @@ class BitPack(array, Value):
         of each item, or a nullary function returning that value.
     """
     def __new__(cls, *args, **kwargs):
-        return array.__new__(cls, bitpack.PACK_FMT)
+        return array.__new__(cls, bitpack.UINT_16)
 
     def __init__(self, nbits, src,*, parent = None):
         """ Initialize a BitPack.

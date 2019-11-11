@@ -1,22 +1,34 @@
 from array import array
 
-PACK_FMT='H'
-
-""" Pack/unpack bit fields
+""" Bit fields manipulation
 """
+
+# ====================================================================
+# Constants
+# ====================================================================
+UINT_SIZE={}
+for fmt in "BHILQ":
+    UINT_SIZE[array(fmt).itemsize] = fmt
+
+UINT_8 = UINT_SIZE[1]
+UINT_16 = UINT_SIZE[2]
+UINT_32 = UINT_SIZE[4]
+UINT_64 = UINT_SIZE[8]
+
+UINT_FORMAT = 'X' + UINT_8*8 + UINT_16 *8 + UINT_32*16 + UINT_64*32
+
+# ====================================================================
+# Global functions
+# ====================================================================
 def unpack(nbits, size, data, dest=None):
     """ split data in nbits chunks
 
         data is an iterator on fixed size ints
     """
     if dest is None:
-        if nbits <= 16:
-            fmt = 'H'
-        elif nbits <= 32:
-            fmt = 'L'
-        elif nbits <= 64:
-            fmt = 'Q'
-        else:
+        try:
+            fmt = UINT_FORMAT[nbits]
+        except IndexError:
             raise OverflowError("Cannot pack/unpack {} bits wide data".format(nbits))
 
         dest = array(fmt)
@@ -38,13 +50,14 @@ def unpack(nbits, size, data, dest=None):
 
     return dest
 
-_format = 'X' + 'B'*8 + 'H'*8 + 'L'*16 + 'Q'*32
-assert len(_format) == 1+64
-
 def pack(nbits, size, data):
     """ join data in chunks of nbits
     """
-    dest = array(_format[nbits])
+    try:
+        dest = array(UINT_FORMAT[nbits])
+    except IndexError:
+        raise OverflowError("Cannot pack/unpack {} bits wide data".format(nbits))
+
     busy = 0
     acc = 0
     mask = (1<<nbits)-1
