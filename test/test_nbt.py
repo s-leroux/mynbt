@@ -431,6 +431,29 @@ class TestArray(unittest.TestCase):
         a.reshape(8)
         self.assertIsNotNone(a._payload)
 
+    def test_reshaped_array_should_save_as_initial_format(self):
+        """ Reshaped arrays should save as initial format
+        """
+        frame = INT_ARRAY_FRAME(range(20), name="Name")
+        # INT are 4 bytes long, we have 20 items
+        modified = bytearray(frame)
+        modified[-4*20+0] = 0x78
+        modified[-4*20+1] = 0x56
+        modified[-4*20+2] = 0x34
+        modified[-4*20+3] = 0x12
+
+        a, *_ = parse(frame)
+        a = a.value()
+
+        a.reshape(8)
+        a[0]=0x12
+        a[1]=0x34
+        a[2]=0x56
+        a[3]=0x78
+
+        dump = a.dump(name="Name")
+
+        self.assertEqual(bytes(dump), bytes(modified))
 
 class TestBitPack(unittest.TestCase):
     def test_1(self):

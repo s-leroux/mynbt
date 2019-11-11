@@ -471,7 +471,14 @@ class Array(Value):
         return enumerate(Integer(v, trait=self._trait.TYPE, parent=self) for v in self._array)
 
     def write_payload(self, output):
-        self._write_payload(self._trait.SIZE, self._array, output)
+        data = self._array
+        nbits = self._nbits_f()
+        expected_nbits = 8*self._trait.SIZE
+
+        if nbits != expected_nbits:
+            data = bitpack.unpack(expected_nbits, nbits, data)
+
+        self._write_payload(self._trait.SIZE, data, output)
 
     @staticmethod
     def _write_payload(size, data, output):
