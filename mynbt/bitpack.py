@@ -10,7 +10,16 @@ def unpack(nbits, size, data, dest=None):
         data is an iterator on fixed size ints
     """
     if dest is None:
-        dest = array(PACK_FMT)
+        if nbits <= 16:
+            fmt = 'H'
+        elif nbits <= 32:
+            fmt = 'L'
+        elif nbits <= 64:
+            fmt = 'Q'
+        else:
+            raise OverflowError("Cannot pack/unpack {} bits wide data".format(nbits))
+
+        dest = array(fmt)
 
     mask = (1<<nbits)-1
     umask = (1<<size)-1 # mask to avoid sign bit extension

@@ -409,15 +409,27 @@ class Array(Value):
         Value.__init__(self, trait = trait, payload = payload, parent = parent)
         self._array = array(trait.FORMAT[-1]) # skip endianness
 
+        nbits = self._array.itemsize*8
+        self._nbits_f = nbits if callable(nbits) else lambda: nbits
+
+
     @classmethod
     def fromValues(cls, values, *, trait, payload = None, parent = None):
         instance = cls(trait=trait, payload=payload, parent=parent)
-        instance._array.extend(v for v, in values)
+        instance._array.extend(values)
         return instance
 
     @property
     def typecode(self):
         return self._array.typecode
+
+    def reshape(self, dst_nbits):
+        """ Reshape the array so each sequence of nbits becomes an items
+        """
+        dst_nbits_f = dst_nbits if callable(dst_nbits) else lambda: dst_nbits
+        self._array = bitpack.unpack(dst_nbits_f(), self._nbits_f(), self._array)
+        self._nbits_f = dst_nbits_f
+
 
     #------------------------------------
     # Converion from native objects
@@ -651,7 +663,7 @@ class AtomProxy(Proxy):
 
 class ArrayProxy(Proxy):
     def unpack(self):
-        return struct.iter_unpack(self._trait.FORMAT, self._payload[4:])
+        return (v for v, in struct.iter_unpack(self._trait.FORMAT, self._payload[4:]))
 
     #------------------------------------
     # Node interface

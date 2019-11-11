@@ -399,6 +399,39 @@ class TestArray(unittest.TestCase):
     def test_long_array(self):
         self._test_array(LONG_ARRAY_FRAME, 1<<64)
 
+    def _test_reshape(self, dst_nbits, trait):
+        node = Array(trait=trait)
+        node._array.frombytes(bytes(x%256 for x in range(64*dst_nbits)))
+
+        mask = (1<<trait.SIZE*8)-1
+
+        start = [x & mask for x in node._array]
+        node.reshape(dst_nbits)
+        node.reshape(trait.SIZE*8)
+        end = [x & mask for x in node._array]
+
+        self.assertSequenceEqual(start, end)
+
+    for b in (4, 5, 6, 7, 8, 10, 12, 14, 16, 32, 48, 64):
+        for t in (ByteArrayTrait, IntArrayTrait, LongArrayTrait):
+            def _(self, b=b, t=t):
+                self._test_reshape(b, t)
+
+            name = "test_reshape_{}_{}".format(t.__name__, b)
+            _.__name__ = name
+            vars()[name] = _
+
+    def test_reshape_should_not_invalidate_cache(self):
+        """ Array.reshape should not invalidate cache
+        """
+        a, *_ = parse(LONG_ARRAY_FRAME(range(20)))
+        a = a.value()
+
+        self.assertIsNotNone(a._payload)
+        a.reshape(8)
+        self.assertIsNotNone(a._payload)
+
+
 class TestBitPack(unittest.TestCase):
     def test_1(self):
         frame = LONG_ARRAY_FRAME([0x12345678FFF0A987]*100, name="")
