@@ -37,3 +37,8 @@ SAMPLE FILES
 
 * MC-1_14_4-World
   A Minecraft 1.14.4 clean new world 
+
+  For reference, in world's coordinte system:
+      At 32,90,16 there is a magma block
+      At 47,90,16 there is a glass block
+      At 47,90,31 there is a stone block

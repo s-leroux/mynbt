@@ -124,8 +124,8 @@ class TestWorld(unittest.TestCase):
     def test_1(self):
         """ World can return a region
         """
-        rx,rz = -1,-2
-        cx,cz = 10,28
+        rx,rz = -1,0
+        cx,cz = 5,25
 
         region = self.world.region(rx,rz)
         self.assertIsNotNone(region)
@@ -138,10 +138,10 @@ class TestWorld(unittest.TestCase):
     def test_2(self):
         """ World can locate chunk in world coordinates
         """
-        chunk = self.world.chunk(-22,-36)
+        chunk = self.world.chunk(-27,25)
         nbt = chunk.parse()
-        self.assertEqual(nbt.Level.xPos, -22)
-        self.assertEqual(nbt.Level.zPos, -36)
+        self.assertEqual(nbt.Level.xPos, -27)
+        self.assertEqual(nbt.Level.zPos, 25)
 
     def test_3(self):
         """ World can iterate over players

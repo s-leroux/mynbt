@@ -34,7 +34,8 @@ class Region(Anvil):
     def parse_chunk_info(self, chunk_info):
         nbt = super().parse_chunk_info(chunk_info)
 
-        patch(nbt, WithSectionAccessor)        
+        if nbt:
+            patch(nbt, WithSectionAccessor)
 
         return nbt
 
@@ -97,5 +98,5 @@ class Region(Anvil):
                 cache[x,z] = (nbt, nbt._version)
                 return super().write_chunk(x,z,nbt,compression=compression, timestamp=timestamp)
 
-        
-        return WithCache 
+
+        return WithCache
