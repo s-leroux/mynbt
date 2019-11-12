@@ -84,10 +84,11 @@ class Section:
         
         seq = array(self._blocks.typecode, (blk for i in xrange))
 
-        for z in zrange:
+        for y in yrange:
             idx = base
             base += 256
-            for y in yrange:
+            for z in zrange:
+                print(xrange.start+16*self._cx, y+16*self._cy, z+16*self._cz, str(self._palette[self._blocks[idx]]), str(blockstate))
                 self._blocks[idx:idx+len(xrange)] = seq
                 idx += 16
 
