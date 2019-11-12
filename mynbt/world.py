@@ -176,6 +176,18 @@ class World:
 
         raise NotImplementedError
 
+    def block(self, x,y,z):
+        """ Get the block at (x,y,z) in the world coordinate system.
+
+            This is awfully inefficient if you need to retrieve many
+            blocks.
+        """
+        cx, x = divmod(x, 16)
+        cy, y = divmod(y, 16)
+        cz, z = divmod(z, 16)
+
+        return self.chunk(cx, cz).parse().section[cy].block(x,y,z)
+
     @property
     def editor(self):
         return ChangeSet(self)

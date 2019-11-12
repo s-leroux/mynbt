@@ -560,6 +560,9 @@ class Proxy(Node):
     def __repr__(self):
         return repr("{base}[{trait},{payload}]".format(base=super().__repr__(), trait=self._trait, payload=self._payload))
 
+    def __str__(self):
+        return self.value().__str__()
+
     #------------------------------------
     # Rich comparisons
     #------------------------------------

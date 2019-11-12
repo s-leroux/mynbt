@@ -151,6 +151,19 @@ class TestWorld(unittest.TestCase):
             _ = (player.filepath, player.Data.Version, [player.Data.SpawnX, player.Data.SpawnY, player.Data.SpawnZ])
 
     def test_4(self):
+        """ World provide direct access to blocks
+        """
+        well_known_blocks = (
+            ((32,90,16), dict(Name="minecraft:magma_block")),
+            ((47,90,16), dict(Name="minecraft:glass")),
+            ((47,90,31), dict(Name="minecraft:stone")),
+        )
+
+        for pos, blk in well_known_blocks:
+            self.assertEqual(self.world.block(*pos), blk)
+
+
+    def test_5(self):
         """ It can apply an arbitrary function in all section of a range
         """
         l = []
@@ -178,8 +191,19 @@ class TestWorldEditor(unittest.TestCase):
         self.world = world.World(MC_COPY_WORLD)
 
     def test_1(self):
-        try:
-            with self.world.editor as editor:
-                editor.fill(range(-1,33), range(0,32), range(100, 122), Name="minecraft:dirt")
-        except:
-            import pdb; pdb.post_mortem()
+        rx = range(-1,33)
+        ry = range(0,32)
+        rz = range(100,122)
+
+        blk = dict(Name="minecraft:dirt")
+
+        with self.world.editor as editor:
+            editor.fill(rx,ry,rz, **blk)
+
+        import random
+
+        for x in random.sample(rx, 4):
+            for y in random.sample(ry,4):
+                for z in random.sample(rz,4):
+                    b = self.world.block(x,y,z)
+                    self.assertEqual(b, blk)
