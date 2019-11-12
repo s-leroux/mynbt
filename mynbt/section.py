@@ -1,4 +1,4 @@
-from mynbt.bitpack import unpack, UINT_16
+from mynbt.bitpack import unpack, UINT_16, INT_64
 
 from pprint import pprint
 from array import array
@@ -13,11 +13,14 @@ def pos2idx(x,y,z):
     return (y*16+z)*16+x
 
 class Section:
-    def __init__(self, cx, cy, cz, palette, blocks):
-        if palette == []:
+    #------------------------------------
+    # Ctor / Factories
+    #------------------------------------
+    def __init__(self, cx, cy, cz, palette=None, blocks=None):
+        if not palette:
             palette=[dict(Name="minecraft:air")]
-        if not len(blocks):
-            blocks = array(blocks.typecode, (0 for i in range(4096)))
+        if not blocks:
+            blocks = array(UINT_16, (0 for i in range(4096)))
 
         self._cx = cx
         self._cy = cy
@@ -26,24 +29,6 @@ class Section:
         self._blocks = blocks
 
         assert len(blocks) == 4096
-
-    def __repr__(self):
-        return "Section({_cx},{_cy},{_cz},{_palette},{_blocks})".format(**vars(self))
-
-    def __str__(self):
-        return "Section({_cx},{_cy},{_cz})".format(**vars(self))
-
-    @property
-    def x(self):
-        return self._cx
-
-    @property
-    def y(self):
-        return self._cy
-
-    @property
-    def z(self):
-        return self._cz
 
     @classmethod
     def fromNBT(cls, cx, cz, section):
@@ -56,7 +41,7 @@ class Section:
 
         blockstate = section.get('BlockStates')
         if not blockstate:
-            section['BlockState'] = array('q', (0 for x in range(4096*nbits()//64)))
+            section['BlockState'] = array(INT_64, (0 for x in range(16*16*16*nbits()//64)))
             blockstate = section['BlockState']
 
         blockstate.reshape(nbits)
@@ -64,8 +49,62 @@ class Section:
 
     @classmethod
     def new(cls, cx, cy, cz):
-        return cls(cx, cy, cz, [], array(UINT_16))
+        return cls(cx, cy, cz)
 
+    #------------------------------------
+    # String conversion
+    #------------------------------------
+    def __repr__(self):
+        return "Section({_cx},{_cy},{_cz},{_palette},{_blocks})".format(**vars(self))
+
+    def __str__(self):
+        return "Section({_cx},{_cy},{_cz})".format(**vars(self))
+
+    #------------------------------------
+    # Utilities
+    #------------------------------------
+    def block_state_index(self, **blockstate):
+        """ Returns the index in the palette of the given block state
+
+            If the block state is not already in the palette it is
+            added.
+        """
+        try:
+            return self._palette.index(blockstate)
+        except ValueError:
+            self._palette.append(blockstate)
+            return len(self._palette)-1
+
+    #------------------------------------
+    # Properties
+    #------------------------------------
+    @property
+    def x(self):
+        return self._cx
+
+    @property
+    def y(self):
+        return self._cy
+
+    @property
+    def z(self):
+        return self._cz
+
+    @property
+    def width(self):
+        return 16
+
+    @property
+    def height(self):
+        return 16
+
+    @property
+    def depth(self):
+        return 16
+
+    #------------------------------------
+    # Block access
+    #------------------------------------
     def block(self, x,y,z):
         """ Get block at (x,y,z) in section's coordinates
         """
@@ -76,30 +115,54 @@ class Section:
         block = self._blocks[pos2idx(x,y,z)]
         return self._palette[block]
 
+    def __setitem__(self, idx, blk):
+        x,y,z = idx
+
+        self.fill(range(x,x+1),range(y,y+1),range(z,z+1), **blk)
+
+    def xz_plane(self, y):
+        """ Return a 2D array representing the xz plane at height y
+
+            Mostly for testing purposes
+        """
+        result = []
+        base = pos2idx(0, y, 0)
+        depth = self.depth
+        width = self.width
+        for z in range(0, depth):
+            result.append([x for x in self._blocks[base:base+width]])
+            base += width
+
+        return result
+
+    #------------------------------------
+    # World modifications
+    #------------------------------------
+    def row_apply(self, fct, xrange, yrange, zrange):
+        """ Apply a function to each x-row of the range
+        """
+        base = pos2idx(xrange.start, yrange.start, zrange.start)
+
+        row_size = self.width
+        plane_size = self.depth*row_size
+        blocks = self._blocks
+
+        for y in yrange:
+            idx = base
+            base += plane_size
+            for z in zrange:
+                fct(blocks, slice(idx,idx+len(xrange)), y, z)
+                idx += row_size
+
     def fill(self, xrange, yrange, zrange, **blockstate):
         """ Fill a range of blocks
         """
         blk = self.block_state_index(**blockstate)
-        base = pos2idx(xrange.start, yrange.start, zrange.start)
-        
         seq = array(self._blocks.typecode, (blk for i in xrange))
 
-        for y in yrange:
-            idx = base
-            base += 256
-            for z in zrange:
-                print(xrange.start+16*self._cx, y+16*self._cy, z+16*self._cz, str(self._palette[self._blocks[idx]]), str(blockstate))
-                self._blocks[idx:idx+len(xrange)] = seq
-                idx += 16
+        def fct(blocks, row, *args):
+            blocks[row] = seq
 
-    def block_state_index(self, **blockstate):
-        """ Returns the index in the palette of the given block state
-        
-            If the block state is not already in the palette it is
-            added.
-        """
-        try:
-            return self._palette.index(blockstate)
-        except ValueError:
-            self._palette.append(blockstate)
-            return len(self._palette)-1
+        self.row_apply(fct, xrange, yrange, zrange)
+
+
