@@ -815,7 +815,7 @@ class CompoundNode(Composite, dict, collections.abc.Hashable):
     #------------------------------------
     @classmethod
     def fromNativeObject(cls, dict_like_object, *, trait = None, parent=None):
-        instance = cls(parent=parent, trait = trait or cls)
+        instance = cls(parent=parent, trait = trait)
         instance.update({k:Node.fromNativeObject(v, parent=instance) for k,v in dict_like_object.items()})
 
         return instance
