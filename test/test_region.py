@@ -56,7 +56,7 @@ class TestRegion(unittest.TestCase):
         """
         self.region.chunk[self.C2X,self.C2Z] = self.region.chunk[self.C1X,self.C1Z]
 
-        nbt = self.region.chunk[self.C2X,self.C2Z].parse()
+        nbt = self.region.chunk[self.C2X,self.C2Z].nbt
         self.assertEqual(nbt.n, "Chunk 1,2")
         self.assertEqual(nbt.Level.xPos, 32*self.RX+self.C2X)
         self.assertEqual(nbt.Level.zPos, 32*self.RZ+self.C2Z)
@@ -67,7 +67,7 @@ class TestRegion(unittest.TestCase):
         """
         self.region.chunk[self.C2X,self.C2Z] = self.region.chunk[self.C1X,self.C1Z]
 
-        nbt = self.region.chunk[self.C2X,self.C2Z].parse()
+        nbt = self.region.chunk[self.C2X,self.C2Z].nbt
         self.assertEqual(nbt.Level.Entities[0].Pos[0], 16*32*self.RX + 16*self.C2X + 11)
         self.assertEqual(nbt.Level.Entities[0].Pos[2], 16*32*self.RZ + 16*self.C2Z + 7)
 
@@ -75,17 +75,17 @@ class TestAccessors(unittest.TestCase):
     def setUp(self):
         self.region = Region.fromFile(0,0,FILE['simplechunk.mca'])
         self.chunk = next(self.region.chunks())
-        self.nbt = self.chunk.parse()
+        self.nbt = self.chunk.nbt
 
     def test_1(self):
         """ Region should attach a section iterator to nbt
         """
-        for section in self.nbt.sections():
+        for section in self.chunk.sections():
             self.assertIsNotNone(section.y)
 
     def test_2(self):
         """ Region should attach a section accessor to nbt
         """
         N=3
-        section = self.nbt.section[N]
+        section = self.chunk.section(N)
         self.assertEqual(section.y, N)

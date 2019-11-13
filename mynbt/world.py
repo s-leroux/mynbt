@@ -115,9 +115,9 @@ class ChangeSet:
         for (rx, ry), chunks in partition(xrange, yrange, zrange).items():
             with self.region(rx, ry) as region:
                 for (cx, cz), sections in chunks.items():
-                    with region.chunk[cx,cz].parse() as nbt:
+                    with region.chunk[cx,cz] as chunk:
                         for cy, *span in sections:
-                            section = nbt.section[cy]
+                            section = chunk.section(cy)
                             fct(section, *span, *args, **kwargs)
 
     def fill(self, xrange, yrange, zrange, **block):
@@ -206,7 +206,7 @@ class World:
         cy, y = divmod(y, 16)
         cz, z = divmod(z, 16)
 
-        return self.chunk(cx, cz).parse().section[cy].block(x,y,z)
+        return self.chunk(cx, cz).section(cy).block(x,y,z)
 
     @property
     def editor(self):

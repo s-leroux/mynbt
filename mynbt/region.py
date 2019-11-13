@@ -4,28 +4,6 @@ from mynbt.utils import patch
 from mynbt.section import Section
 
 #------------------------------------
-# Section mixin
-#------------------------------------
-class WithSectionAccessor:
-    class SectionAccessor:
-        def __init__(self, nbt):
-            self._nbt = nbt
-
-        def __getitem__(self, idx):
-            # XXX Should try and return a new section if not found
-            try:
-                return next(self._nbt.sections(filter=lambda section : section.Y == idx))
-            except StopIteration:
-                return Section.new(self._nbt.Level.xPos, idx, self._nbt.Level.zPos)
-
-    section = property(SectionAccessor)
-
-    def sections(self, filter=lambda section : True):
-        for section in self['Level']['Sections']:
-            if filter(section):
-                yield Section.fromNBT(self.Level.xPos, self.Level.zPos, section)
-
-#------------------------------------
 # Region
 #------------------------------------
 class Region(Anvil):
@@ -33,9 +11,6 @@ class Region(Anvil):
     """
     def parse_chunk_info(self, chunk_info):
         nbt = super().parse_chunk_info(chunk_info)
-
-        if nbt:
-            patch(nbt, WithSectionAccessor)
 
         return nbt
 
@@ -102,9 +77,14 @@ class Region(Anvil):
         return WithCache
 
     class Chunk(Anvil.Chunk):
-        def sections(self):
-            pass
-
+        def sections(self, filter=lambda section : True):
+            level = self.nbt['Level']
+            for section in level['Sections']:
+                if filter(section):
+                    yield Section.fromNBT(level.xPos, level.zPos, section)
 
         def section(self, y):
-            pass
+            try:
+                return next(self.sections(filter=lambda section : section.Y == y))
+            except StopIteration:
+                return Section.new(self.nbt.Level.xPos, idx, self.nbt.Level.zPos)

@@ -131,7 +131,7 @@ class TestWorld(unittest.TestCase):
         self.assertIsNotNone(region)
 
         chunk = region.chunk[cx,cz]
-        nbt = chunk.parse()
+        nbt = chunk.nbt
         self.assertEqual(nbt.Level.xPos, rx*32+cx)
         self.assertEqual(nbt.Level.zPos, rz*32+cz)
 
@@ -139,7 +139,7 @@ class TestWorld(unittest.TestCase):
         """ World can locate chunk in world coordinates
         """
         chunk = self.world.chunk(-27,25)
-        nbt = chunk.parse()
+        nbt = chunk.nbt
         self.assertEqual(nbt.Level.xPos, -27)
         self.assertEqual(nbt.Level.zPos, 25)
 

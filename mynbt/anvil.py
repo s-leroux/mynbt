@@ -510,6 +510,7 @@ class Anvil:
             self._x = chunk_info.x
             self._z = chunk_info.z
             self._nbt = None
+            self._orig_version = None
 
         def __str__(self):
             return "Chunk({x},{z})".format(x=self.x, z=self.z)
@@ -519,40 +520,32 @@ class Anvil:
         data = property(lambda self: self._chunk.data)
         chunk_info = property(lambda self: self._chunk)
 
-        def parse(self):
-            """ Parse the chuck and returns the corresponding
-                NBT object wrapped in a context manager
-                to update the chunk on exit
+        #------------------------------------
+        # Context manager
+        #------------------------------------
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, *args):
+            if exc_type is None and self._nbt and self._nbt._version > self._orig_version:
+                self.write(self._nbt)
+
+        @property
+        def nbt(self):
+            """ Lazy loading on the NBT tree
             """
             if not self._nbt:
                 self._nbt = self._region.parse_chunk_info(self._chunk)
                 if not self._nbt:
                     raise EmptyChunkError(self._region, self._x, self._z)
 
-            chunk = self
-            old_version = self._nbt._version
+                self._orig_version = self._nbt._version
 
-            class ContextManager:
-                def __getattr__(self, name):
-                    return getattr(chunk._nbt, name)
-
-                def __setattr__(self, name, value):
-                    return setattr(chunk._nbt, name, value)
-
-                def __str__(self):
-                    return str(chunk._nbt)
-
-                def __enter__(self):
-                    return self
-
-                def __exit__(self, exc_type, *args):
-                    if exc_type is None and chunk._nbt._version > old_version:
-                        chunk.write(chunk._nbt)
-
-            return ContextManager()
+            return self._nbt
 
         def write(self, nbt):
             self._nbt = nbt
+            self._orig_version = self._nbt._version
             self._region.write_chunk(self._x, self._z, nbt)
 
         def kill(self):

@@ -54,7 +54,7 @@ class TestPOI(unittest.TestCase):
     def test_1(self):
         self.poi.chunk[self.C2X,self.C2Z] = self.poi.chunk[self.C1X,self.C1Z]
 
-        nbt = self.poi.chunk[self.C2X,self.C2Z].parse()
+        nbt = self.poi.chunk[self.C2X,self.C2Z].nbt
         pos = nbt.Data.Sections[1].Records[0].pos
 
         self.assertEqual(pos[0], 16*32*self.RX + 16*self.C2X + 11)

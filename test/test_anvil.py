@@ -215,8 +215,8 @@ class TestAnvil(unittest.TestCase):
             )
           )),
         ))
-        with region.chunk[1,2].parse() as nbt:
-            nbt.data = 12
+        with region.chunk[1,2] as chunk:
+            chunk.nbt.data = 12
 
         self.assertEqual(region.parse_chunk(1,2).data, 12)
 
@@ -275,8 +275,8 @@ class TestAnvilEdgeCases(unittest.TestCase):
             return None
         """
         with self.assertRaises(EmptyChunkError) as cm:
-            with self.root.chunk[5,5].parse() as nbt:
-                self.assertIsNone(nbt)
+            with self.root.chunk[5,5] as chunk:
+                self.assertIsNone(chunk.nbt)
 
     def test_3(self):
         """ Anvil files should not break on loading damaged files
@@ -380,9 +380,9 @@ class TestInterAnvil(unittest.TestCase):
         """ Context managers can be used to copy data between
             regions
         """
-        with self.r1.chunk[1,2].parse() as nbt1:
-            with self.r2.chunk[3,4].parse() as nbt2:
-                nbt1.r1d1 = nbt2.r2d2
+        with self.r1.chunk[1,2] as chunk1:
+            with self.r2.chunk[3,4] as chunk2:
+                chunk1.nbt.r1d1 = chunk2.nbt.r2d2
 
         result = self.r1.parse_chunk(1,2)
         self.assertEqual(result.r1d1.r2d21.b, 78)
