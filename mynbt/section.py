@@ -140,6 +140,10 @@ class Section:
     #------------------------------------
     def row_apply(self, fct, xrange, yrange, zrange):
         """ Apply a function to each x-row of the range
+
+            `fct` is a callable with the signature `fct(section, block, slice, y, z)`
+            `block[slice]` is the section of a row where the function
+            should apply.
         """
         base = pos2idx(xrange.start, yrange.start, zrange.start)
 
@@ -151,7 +155,7 @@ class Section:
             idx = base
             base += plane_size
             for z in zrange:
-                fct(blocks, slice(idx,idx+len(xrange)), y, z)
+                fct(self, blocks, slice(idx,idx+len(xrange)), y, z)
                 idx += row_size
 
     def fill(self, xrange, yrange, zrange, **blockstate):
@@ -160,7 +164,7 @@ class Section:
         blk = self.block_state_index(**blockstate)
         seq = array(self._blocks.typecode, (blk for i in xrange))
 
-        def fct(blocks, row, *args):
+        def fct(section, blocks, row, *args):
             blocks[row] = seq
 
         self.row_apply(fct, xrange, yrange, zrange)

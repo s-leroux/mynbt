@@ -2,6 +2,9 @@ import os
 import os.path
 import glob
 
+from array import array
+
+from mynbt.bitpack import UINT_16
 from mynbt.region import Region
 from mynbt.section import Section
 from mynbt.poi import POI
@@ -121,6 +124,23 @@ class ChangeSet:
         """ Fill an area of the world
         """
         self.apply(Section.fill, xrange, yrange, zrange, **block)
+
+    def copy(self, xrange, yrange, zrange):
+        """ Return a new section containing a copy of world blocks 
+            in the given range
+        """,
+        # XXX How to deal with tile entities?
+
+        # XXX NOT WORKING: should map block ids
+        dest = defaultdict(lambda : array(UINT_16, (0 for i in range(4096))))
+
+        def _copy(section, blocks, row, y, z):
+            chunk = dest[section.x, section.y]
+            dest[row] = blocks[row]
+
+        self.apply(_copy, xrange, yrange, zrange)
+
+        return dest
 
 # ====================================================================
 # World

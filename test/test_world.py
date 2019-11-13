@@ -206,4 +206,4 @@ class TestWorldEditor(unittest.TestCase):
             for y in random.sample(ry,4):
                 for z in random.sample(rz,4):
                     b = self.world.block(x,y,z)
-                    self.assertEqual(b, blk)
+                    self.assertEqual(b, blk, msg="{}/{}/{} = {}".format(x,y,z,str(b)))
