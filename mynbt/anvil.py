@@ -186,68 +186,6 @@ def parse_chunk_header(chunk_data):
     )
 
 # ====================================================================
-# Chunk
-# ====================================================================
-class Chunk:
-    """ Store an individual chunk
-    """
-    def __init__(self, region, chunk_info):
-        self._region = region
-        self._chunk = chunk_info
-        self._x = chunk_info.x
-        self._z = chunk_info.z
-
-    def __str__(self):
-        return "Chunk({x},{z})".format(x=self.x, z=self.z)
-
-    x = property(lambda self: self._x)
-    z = property(lambda self: self._z)
-    data = property(lambda self: self._chunk.data)
-    chunk_info = property(lambda self: self._chunk)
-
-    def parse(self):
-        """ Parse the chuck and returns the corresponding
-            NBT object wrapped in a context manager
-            to update the chunk on exit
-        """
-        chunk = self
-        nbt = self._region.parse_chunk_info(self._chunk)
-        if not nbt:
-            raise EmptyChunkError(self._region, self._x, self._z)
-
-        old_version = nbt._version
-
-        class ContextManager:
-            def __getattr__(self, name):
-                return getattr(nbt, name)
-
-            def __setattr__(self, name, value):
-                return setattr(nbt, name, value)
-
-            def __str__(self):
-                return str(nbt)
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, exc_type, *args):
-                if exc_type is None and nbt._version > old_version:
-                    chunk.write(nbt)
-
-        return ContextManager()
-
-    def write(self, nbt):
-        self._region.write_chunk(self._x, self._z, nbt)
-
-    def kill(self):
-        self._region.kill_chunk(self._x, self._z)
-
-    # data = property(
-    #   lambda self: self._region.get_chunk_data(self._x, self._z),
-    #   lambda self, data: self._region.set_chunk_data(self._x, self._z, data)
-    # )
-
-# ====================================================================
 # Anvil
 # ====================================================================
 class Anvil:
@@ -498,7 +436,7 @@ class Anvil:
             self.region = region
 
         def __getitem__(self, idx):
-            return Chunk(self.region, self.region.chunk_info(*idx))
+            return self.region.Chunk(self.region, self.region.chunk_info(*idx))
 
         def __setitem__(self, idx, chunk):
             self.region.set_chunk(*idx, chunk.chunk_info)
@@ -506,7 +444,7 @@ class Anvil:
     chunk = property(ChunkAccessor)
 
     def get_chunk(self, x, z):
-        return Chunk(self, self.chunk_info(x, z))
+        return self.Chunk(self, self.chunk_info(x, z))
 
     def chunks(self, filter=lambda region, info : len(info.data) and region.is_valid_chunk(info)):
         for chunk in self._chunks:
@@ -559,3 +497,65 @@ class Anvil:
       patch(result, withsave(path, open, lambda: result._version > old_version))
 
       return result
+
+    # ================================================================
+    # Chunk inner class
+    # ================================================================
+    class Chunk:
+        """ A self-contained object to represent a chunk of data
+        """
+        def __init__(self, region, chunk_info):
+            self._region = region
+            self._chunk = chunk_info
+            self._x = chunk_info.x
+            self._z = chunk_info.z
+            self._nbt = None
+
+        def __str__(self):
+            return "Chunk({x},{z})".format(x=self.x, z=self.z)
+
+        x = property(lambda self: self._x)
+        z = property(lambda self: self._z)
+        data = property(lambda self: self._chunk.data)
+        chunk_info = property(lambda self: self._chunk)
+
+        def parse(self):
+            """ Parse the chuck and returns the corresponding
+                NBT object wrapped in a context manager
+                to update the chunk on exit
+            """
+            if not self._nbt:
+                self._nbt = self._region.parse_chunk_info(self._chunk)
+                if not self._nbt:
+                    raise EmptyChunkError(self._region, self._x, self._z)
+
+            chunk = self
+            old_version = self._nbt._version
+
+            class ContextManager:
+                def __getattr__(self, name):
+                    return getattr(chunk._nbt, name)
+
+                def __setattr__(self, name, value):
+                    return setattr(chunk._nbt, name, value)
+
+                def __str__(self):
+                    return str(chunk._nbt)
+
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, exc_type, *args):
+                    if exc_type is None and chunk._nbt._version > old_version:
+                        chunk.write(chunk._nbt)
+
+            return ContextManager()
+
+        def write(self, nbt):
+            self._nbt = nbt
+            self._region.write_chunk(self._x, self._z, nbt)
+
+        def kill(self):
+            self._region.kill_chunk(self._x, self._z)
+
+

@@ -100,3 +100,11 @@ class Region(Anvil):
 
 
         return WithCache
+
+    class Chunk(Anvil.Chunk):
+        def sections(self):
+            pass
+
+
+        def section(self, y):
+            pass
