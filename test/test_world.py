@@ -5,7 +5,7 @@ import shutil
 from pprint import pprint
 
 import mynbt.world as world
-from mynbt.section import Section
+from mynbt.section import Section, xz_plane
 
 MC_SAMPLE_WORLD=os.path.join('test','data','MC-1_14_4-World')
 MC_COPY_WORLD=os.path.join('test','tmp','MC-1_14_4-World')
@@ -210,6 +210,11 @@ class TestWorldEditor(unittest.TestCase):
 
     def test_2(self):
         with self.world.editor as editor:
-            copy = editor.copy(range(0, 3), range(0,6), range(-10, 10))
-            # XXX How to test that?
-            # pprint(copy)
+            r = (range(0, 3), range(0,6), range(-10, 10))
+            editor.fill(*r, Name="minecraft:stone_brick")
+            editor.fill(range(1,2), *r[1:3], Name="minecraft:magma_block")
+            copy = editor.copy(*r)
+
+            for y in r[1]:
+                for row in xz_plane(copy, y):
+                    self.assertEqual(row, (1,2,1))

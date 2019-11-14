@@ -7,7 +7,7 @@ from array import array
 
 from mynbt.bitpack import UINT_16
 from mynbt.region import Region
-from mynbt.section import Section
+from mynbt.section import Section, new_block_map, blit
 from mynbt.poi import POI
 from mynbt.nbt import parse_file
 
@@ -127,27 +127,22 @@ class ChangeSet:
         self.apply(Section.fill, xrange, yrange, zrange, **block)
 
     def copy(self, xrange, yrange, zrange):
-        """ Return a set of section containing a copy of world blocks
+        """ Return a BlockMap containing a copy of world blocks
             in the given range
         """,
         # XXX How to deal with tile entities?
 
-        # XXX NOT WORKING: should map block ids
-        result = {}
+        dest = new_block_map(len(xrange), len(yrange), len(zrange))
+        dx, dy, dz = xrange.start, yrange.start, zrange.start
 
         def _copy(section, xrange, yrange, zrange):
-            result[section.x, section.y, section.z] = \
-                Section.copy(section, xrange, yrange, zrange)
+            blit(section, (xrange.start, yrange.start, zrange.start),
+                 dest, (16*section.x-dx+xrange.start, 16*section.y-dy+yrange.start, 16*section.z-dz+zrange.start),
+                 len(xrange), len(yrange), len(zrange))
 
         self.apply(_copy, xrange, yrange, zrange)
 
-        # Remap keys to set the first section at (0,0,0)
-        (dx,dy,dz) = tuple(itertools.starmap(min, zip(*result.keys())))
-        result = {
-            (x-dx,y-dy,z-dz): v for (x,y,z),v in result.items()
-        }
-
-        return result
+        return dest
 
 # ====================================================================
 # World

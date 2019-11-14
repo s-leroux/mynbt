@@ -1,8 +1,22 @@
 from mynbt.bitpack import unpack, UINT_16, INT_64
 
+from collections import namedtuple
 from pprint import pprint
 from array import array
 
+# ====================================================================
+# Structs
+# ====================================================================
+BlockMap = namedtuple('BlockMap', ['palette', 'blocks', 'row_span', 'plane_span'])
+def new_block_map(width, height, depth):
+    return BlockMap(
+        [dict(Name="minecraft:air")],
+        array(UINT_16, [0])*depth*width*height,
+        width, depth*width)
+
+# ====================================================================
+# Utilities
+# ====================================================================
 def idx2pos(idx):
     r,x = divmod(idx, 16)
     y,z = divmod(r, 16)
@@ -24,39 +38,50 @@ def block_state_index(palette, **blockstate):
         palette.append(blockstate)
         return len(palette)-1
 
-def blitter(src_palette, src_blocks, src_row_span, src_plane_span,
-            dst_palette, dst_blocks, dst_row_span, dst_plane_span):
+def xz_plane(blkmap, y):
+    """ Return a 2D array representing the xz plane at height y
+
+        Mostly for testing purposes
+    """
+    result = []
+    base = y*blkmap.plane_span
+    z = 0
+    while z < blkmap.plane_span:
+        start = base + z
+        z += blkmap.row_span
+        end = base + z
+        result.append(tuple(blkmap.blocks[start:end]))
+
+    return result
+
+def blit(src, src_start, dst, dst_start, width, height, depth):
     """ Return a blitter function to copy blocks from src to dst
     """
+    # src_start and dst_start assumed to be (x,y,z) tuples
+    src_base = src_start[1]*src.plane_span+src_start[2]*src.row_span+src_start[0]
+    dst_base = dst_start[1]*dst.plane_span+dst_start[2]*dst.row_span+dst_start[0]
 
-    def _blit(src_start, dst_start, width, height, depth):
-        # src_start and dst_start assumed to be (x,y,z) tuples
-        src_base = src_start[1]*src_plane_span+src_start[2]*src_row_span+src_start[0]
-        dst_base = dst_start[1]*dst_plane_span+dst_start[2]*dst_row_span+dst_start[0]
+    map = []
+    map_ext = [None]*10
 
-        map = []
-        map_ext = [None]*10
+    for y in range(height):
+        src_idx = src_base
+        dst_idx = dst_base
+        src_base += src.plane_span
+        dst_base += dst.plane_span
+        for z in range(depth):
+            for x in range(width):
+                blk = src.blocks[src_idx+x]
+                while blk > len(map):
+                    map.extend(map_ext)
 
-        for y in range(height):
-            src_idx = src_base
-            dst_idx = dst_base
-            src_base += src_plane_span
-            dst_base += dst_plane_span
-            for z in range(depth):
-                for x in range(width):
-                    blk = src_blocks[src_idx+x]
-                    while blk > len(map):
-                        map.extend(map_ext)
+                if map[blk] is None:
+                    map[blk] = block_state_index(dst.palette, **src.palette[blk])
 
-                    if map[blk] is None:
-                        map[blk] = block_state_index(dst_palette, **src_palette[blk])
+                dst.blocks[dst_idx+x] = map[blk]
 
-                    dst_blocks[dst_idx+x] = map[blk]
-
-                src_idx += src_row_span
-                dst_idx += dst_row_span
-
-    return _blit
+            src_idx += src.row_span
+            dst_idx += dst.row_span
 
 
 # ====================================================================
@@ -170,6 +195,22 @@ class Section:
     @property
     def depth(self):
         return 16
+
+    @property
+    def row_span(self):
+        return 16
+
+    @property
+    def plane_span(self):
+        return 16*16
+
+    @property
+    def blocks(self):
+        return self._blocks
+
+    @property
+    def palette(self):
+        return self._palette
 
     #------------------------------------
     # Block access

@@ -76,26 +76,22 @@ class TestBlit(unittest.TestCase):
     def test_1(self):
         """ Blitter can copy blocks
         """
-        src_palette = [
+        src = new_block_map(8,8,8)
+        src.palette[:] = [
             dict(Name="minecraft:air"),
             dict(Name="minecraft:stone"),
             dict(Name="minecraft:magma_block"),
         ]
-        src_blocks = array('H', [1]*8*8*8)
-        src_blocks[2*8*8+2*8+2] = 2
-        dst_palette = [
+        src.blocks[:] = array('H', [1])*8*8*8
+        src.blocks[2*8*8+2*8+2] = 2
+
+        dst = new_block_map(5,6,7)
+        dst.palette[:] = [
             dict(Name="minecraft:air"),
             dict(Name="minecraft:cobblestone"),
         ]
-        dst_blocks = array('H', [0]*5*6*7)
 
-
-        blt = blitter(
-            src_palette, src_blocks, 8, 8*8,
-            dst_palette, dst_blocks, 5, 5*7,
-        )
-
-        blt((2,2,2), (1,2,3), 3,2,1)
+        blit(src, (2,2,2), dst, (1,2,3), 3,2,1)
 
         # n = 0
         # for y in range(6):
@@ -155,7 +151,7 @@ class TestBlit(unittest.TestCase):
             0, 0, 0, 0, 0, 
             0, 0, 0, 0, 0, 
         ]
-        self.assertSequenceEqual(dst_blocks, expected)
+        self.assertSequenceEqual(dst.blocks, expected)
 
 class TestMoreSection(unittest.TestCase):
     def setUp(self):
