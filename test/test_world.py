@@ -207,3 +207,9 @@ class TestWorldEditor(unittest.TestCase):
                 for z in random.sample(rz,4):
                     b = self.world.block(x,y,z)
                     self.assertEqual(b, blk, msg="{}/{}/{} = {}".format(x,y,z,str(b)))
+
+    def test_2(self):
+        with self.world.editor as editor:
+            copy = editor.copy(range(0, 3), range(0,6), range(-10, 10))
+            # XXX How to test that?
+            # pprint(copy)

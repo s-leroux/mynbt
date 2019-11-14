@@ -126,21 +126,21 @@ class ChangeSet:
         self.apply(Section.fill, xrange, yrange, zrange, **block)
 
     def copy(self, xrange, yrange, zrange):
-        """ Return a new section containing a copy of world blocks 
+        """ Return a set of section containing a copy of world blocks
             in the given range
         """,
         # XXX How to deal with tile entities?
 
         # XXX NOT WORKING: should map block ids
-        dest = defaultdict(lambda : array(UINT_16, (0 for i in range(4096))))
+        result = {}
 
-        def _copy(section, blocks, row, y, z):
-            chunk = dest[section.x, section.y]
-            dest[row] = blocks[row]
+        def _copy(section, xrange, yrange, zrange):
+            result[section.x, section.y, section.z] = \
+                Section.copy(section, xrange, yrange, zrange)
 
         self.apply(_copy, xrange, yrange, zrange)
 
-        return dest
+        return result
 
 # ====================================================================
 # World
