@@ -1,6 +1,7 @@
 import os
 import os.path
 import glob
+import itertools
 
 from array import array
 
@@ -139,6 +140,12 @@ class ChangeSet:
                 Section.copy(section, xrange, yrange, zrange)
 
         self.apply(_copy, xrange, yrange, zrange)
+
+        # Remap keys to set the first section at (0,0,0)
+        (dx,dy,dz) = tuple(itertools.starmap(min, zip(*result.keys())))
+        result = {
+            (x-dx,y-dy,z-dz): v for (x,y,z),v in result.items()
+        }
 
         return result
 
