@@ -12,6 +12,56 @@ def idx2pos(idx):
 def pos2idx(x,y,z):
     return (y*16+z)*16+x
 
+def block_state_index(palette, **blockstate):
+    """ Returns the index in the palette of the given block state
+
+        If the block state is not already in the palette it is
+        added.
+    """
+    try:
+        return palette.index(blockstate)
+    except ValueError:
+        palette.append(blockstate)
+        return len(palette)-1
+
+def blitter(src_palette, src_blocks, src_row_span, src_plane_span,
+            dst_palette, dst_blocks, dst_row_span, dst_plane_span):
+    """ Return a blitter function to copy blocks from src to dst
+    """
+
+    def _blit(src_start, dst_start, width, height, depth):
+        # src_start and dst_start assumed to be (x,y,z) tuples
+        src_base = src_start[1]*src_plane_span+src_start[2]*src_row_span+src_start[0]
+        dst_base = dst_start[1]*dst_plane_span+dst_start[2]*dst_row_span+dst_start[0]
+
+        map = []
+        map_ext = [None]*10
+
+        for y in range(height):
+            src_idx = src_base
+            dst_idx = dst_base
+            src_base += src_plane_span
+            dst_base += dst_plane_span
+            for z in range(depth):
+                for x in range(width):
+                    blk = src_blocks[src_idx+x]
+                    while blk > len(map):
+                        map.extend(map_ext)
+
+                    if map[blk] is None:
+                        map[blk] = block_state_index(dst_palette, **src_palette[blk])
+
+                    dst_blocks[dst_idx+x] = map[blk]
+
+                src_idx += src_row_span
+                dst_idx += dst_row_span
+
+    return _blit
+
+
+# ====================================================================
+# Section
+# ====================================================================
 class Section:
     #------------------------------------
     # Ctor / Factories
@@ -92,11 +142,7 @@ class Section:
             If the block state is not already in the palette it is
             added.
         """
-        try:
-            return self._palette.index(blockstate)
-        except ValueError:
-            self._palette.append(blockstate)
-            return len(self._palette)-1
+        return block_state_index(self._palette, **blockstate)
 
     #------------------------------------
     # Properties

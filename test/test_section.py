@@ -4,6 +4,7 @@ from mynbt.section import *
 import mynbt.nbt as nbt
 from test.data.simplechunk import SECTION
 from pprint import pprint
+from array import array
 
 class TestUtils(unittest.TestCase):
     def test_1(self):
@@ -70,6 +71,91 @@ class TestSection(unittest.TestCase):
                 for z in zrange:
                     self.assertEqual(self.section.block(x,y,z)['Name'], "minecraft:dirt")
 
+
+class TestBlit(unittest.TestCase):
+    def test_1(self):
+        """ Blitter can copy blocks
+        """
+        src_palette = [
+            dict(Name="minecraft:air"),
+            dict(Name="minecraft:stone"),
+            dict(Name="minecraft:magma_block"),
+        ]
+        src_blocks = array('H', [1]*8*8*8)
+        src_blocks[2*8*8+2*8+2] = 2
+        dst_palette = [
+            dict(Name="minecraft:air"),
+            dict(Name="minecraft:cobblestone"),
+        ]
+        dst_blocks = array('H', [0]*5*6*7)
+
+
+        blt = blitter(
+            src_palette, src_blocks, 8, 8*8,
+            dst_palette, dst_blocks, 5, 5*7,
+        )
+
+        blt((2,2,2), (1,2,3), 3,2,1)
+
+        # n = 0
+        # for y in range(6):
+        #     print()
+        #     for z in range(7):
+        #         for x in range(5):
+        #             print(dst_blocks[n], end=", ")
+        #             n += 1
+        #         print()
+
+        expected = [
+            0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 
+
+            0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 
+
+            0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 
+            0, 2, 3, 3, 0, 
+            0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 
+
+            0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 
+            0, 3, 3, 3, 0, 
+            0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 
+
+            0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 
+
+            0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 
+        ]
+        self.assertSequenceEqual(dst_blocks, expected)
 
 class TestMoreSection(unittest.TestCase):
     def setUp(self):
