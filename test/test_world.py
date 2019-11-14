@@ -218,3 +218,16 @@ class TestWorldEditor(unittest.TestCase):
             for y in r[1]:
                 for row in xz_plane(copy, y):
                     self.assertEqual(row, (1,2,1))
+
+    def test_3(self):
+        with self.world.editor as editor:
+            r = (range(0, 3), range(0,6), range(-10, 10))
+            editor.fill(*r, Name="minecraft:stone_brick")
+            editor.fill(range(1,2), *r[1:3], Name="minecraft:magma_block")
+            copy = editor.copy(*r)
+            editor.paste(copy, 5,0,-10)
+            copy = editor.copy(range(5,8), *r[1:3])
+            for y in r[1]:
+                for row in xz_plane(copy, y):
+                    # pprint(row)
+                    self.assertEqual(row, (1,2,1))

@@ -57,6 +57,7 @@ def xz_plane(blkmap, y):
 def blit(src, src_start, dst, dst_start, width, height, depth):
     """ Return a blitter function to copy blocks from src to dst
     """
+    # print("blit", src_start, "to", dst_start, "for", width, height, depth)
     # src_start and dst_start assumed to be (x,y,z) tuples
     src_base = src_start[1]*src.plane_span+src_start[2]*src.row_span+src_start[0]
     dst_base = dst_start[1]*dst.plane_span+dst_start[2]*dst.row_span+dst_start[0]

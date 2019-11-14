@@ -136,6 +136,7 @@ class ChangeSet:
         dx, dy, dz = xrange.start, yrange.start, zrange.start
 
         def _copy(section, xrange, yrange, zrange):
+            # print("copy", section.x, section.y, section.z)
             blit(section, (xrange.start, yrange.start, zrange.start),
                  dest, (16*section.x-dx+xrange.start, 16*section.y-dy+yrange.start, 16*section.z-dz+zrange.start),
                  len(xrange), len(yrange), len(zrange))
@@ -143,6 +144,23 @@ class ChangeSet:
         self.apply(_copy, xrange, yrange, zrange)
 
         return dest
+
+    def paste(self, blockmap, x, y, z, width=None, height=None, depth=None):
+        if width is None:
+            width = blockmap.row_span
+        if height is None:
+            height = len(blockmap.blocks)//blockmap.plane_span
+        if depth is None:
+            depth = blockmap.plane_span//blockmap.row_span
+
+        def _paste(section, xrange, yrange, zrange):
+            # print("paste", section.x, section.y, section.z)
+            blit(blockmap, (16*section.x-x+xrange.start, 16*section.y-y+yrange.start, 16*section.z-z+zrange.start),
+                 section, (xrange.start, yrange.start, zrange.start),
+                 len(xrange), len(yrange), len(zrange))
+
+        self.apply(_paste, range(x, x+width), range(y, y+height), range(z, z+depth))
+
 
 # ====================================================================
 # World
