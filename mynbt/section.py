@@ -51,6 +51,29 @@ class Section:
     def new(cls, cx, cy, cz):
         return cls(cx, cy, cz)
 
+    @classmethod
+    def copy(cls, section, rx, ry, rz):
+        """ Create a partial copy of a section.
+
+            Blocks that aren't copied are filled with "minecraft:air"
+        """
+        result = cls(section._cx,section._cy,section._cz)
+        map = []
+        def _copy(section, blocks, row, *args):
+            for n in range(row.start, row.stop):
+                blk = blocks[n]
+                while blk > len(map):
+                    map.extend([None]*10)
+
+                if map[blk] is None:
+                    map[blk] = result.block_state_index(**section._palette[blk])
+
+                result._blocks[n] = map[blk]
+
+        section.row_apply(_copy, rx,ry,rz)
+
+        return result
+
     #------------------------------------
     # String conversion
     #------------------------------------
@@ -158,7 +181,7 @@ class Section:
                 fct(self, blocks, slice(idx,idx+len(xrange)), y, z)
                 idx += row_size
 
-    def fill(self, xrange, yrange, zrange, **blockstate):
+    def fill(self, xrange=range(0,16), yrange=range(0,16), zrange=range(0,16), **blockstate):
         """ Fill a range of blocks
         """
         blk = self.block_state_index(**blockstate)
