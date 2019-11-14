@@ -14,6 +14,41 @@ def new_block_map(width, height, depth):
         array(UINT_16, [0])*depth*width*height,
         width, depth*width)
 
+def block_map_from_text_map(palette, *xz_planes):
+    p = []
+    p_map = {}
+    for k, v in palette.items():
+        p_map[k] = len(p)
+        p.append(v)
+
+    width = 0
+    depth = 0
+    height = len(xz_planes)
+
+    stack = []
+    for xz_plane in xz_planes:
+        depth = max(depth, len(xz_plane))
+        plane = []
+        for row in xz_plane:
+            width = max(width, len(row))
+            plane.append(array(UINT_16, [p_map[c] for c in row]))
+        stack.append(plane)
+
+    empty_row = array(UINT_16,[0])*width
+    blocks = array(UINT_16)
+
+    while stack:
+        plane = stack.pop()
+        while len(plane) < depth:
+            plane.append(empty_row)
+        while plane:
+            row = plane.pop()
+            row += empty_row[:width-len(row)]
+
+            blocks += row
+
+    return BlockMap(p, blocks, width, width*depth)
+
 # ====================================================================
 # Utilities
 # ====================================================================
